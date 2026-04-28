@@ -6,6 +6,8 @@ description: >
   rebuild/reporting workflows.
 license: Apache-2.0
 metadata:
+  author: Clayton Young / Superior Byte Works, LLC (@borealBytes)
+  version: "1.0.0"
   skill-author: Clayton Young / Superior Byte Works, LLC (@borealBytes)
   skill-version: "1.0.0"
 ---
