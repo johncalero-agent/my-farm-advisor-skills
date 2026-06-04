@@ -6,13 +6,13 @@ author: Boreal Bytes
 tags: [visualization, plotting, matplotlib, seaborn, pandas]
 ---
 
-# Skill: eda-visualize
+# Workflow: eda-visualize
 
 ## Description
 
-Create professional data visualizations for agricultural datasets using standard Python libraries (pandas, matplotlib, seaborn). This skill provides copy-paste ready code examples for common visualization tasks - no custom wrappers, just real library code.
+Create professional data visualizations for agricultural datasets using standard Python libraries (pandas, matplotlib, seaborn). This workflow provides copy-paste ready code examples for common visualization tasks - no custom wrappers, just real library code.
 
-## When to Use This Skill
+## When to Use This Workflow
 
 - **Exploring distributions**: Use histograms to see how values are spread
 - **Finding relationships**: Use scatter plots to see correlations

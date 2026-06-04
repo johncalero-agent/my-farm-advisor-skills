@@ -6,13 +6,13 @@ author: Boreal Bytes
 tags: [comparison, statistics, groups, pandas, scipy]
 ---
 
-# Skill: eda-compare
+# Workflow: eda-compare
 
 ## Description
 
 Compare groups and categories within agricultural datasets using standard pandas and scipy. Perform statistical comparisons, create comparative visualizations, and calculate statistical significance using real library code.
 
-## When to Use This Skill
+## When to Use This Workflow
 
 - **Comparing regions**: Compare yields across different areas
 - **Crop comparisons**: Analyze differences between crop types

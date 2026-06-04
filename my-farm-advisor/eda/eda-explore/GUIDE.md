@@ -6,13 +6,13 @@ author: Boreal Bytes
 tags: [eda, exploration, pandas, statistics, analysis]
 ---
 
-# Skill: eda-explore
+# Workflow: eda-explore
 
 ## Description
 
-Explore and understand agricultural datasets using standard pandas operations. This skill teaches you how to generate comprehensive data summaries, identify data quality issues, and profile your data using real pandas code.
+Explore and understand agricultural datasets using standard pandas operations. This workflow teaches you how to generate comprehensive data summaries, identify data quality issues, and profile your data using real pandas code.
 
-## When to Use This Skill
+## When to Use This Workflow
 
 - **First look at data**: Get a quick overview of what's in your dataset
 - **Data quality check**: Find missing values, duplicates, and outliers

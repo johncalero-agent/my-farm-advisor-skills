@@ -6,13 +6,13 @@ author: Boreal Bytes
 tags: [correlation, statistics, pandas, scipy, analysis]
 ---
 
-# Skill: eda-correlate
+# Workflow: eda-correlate
 
 ## Description
 
 Analyze correlations between variables in agricultural datasets using standard pandas and scipy. Calculate correlation coefficients, identify significant relationships, and create correlation matrices with heatmaps using real library code.
 
-## When to Use This Skill
+## When to Use This Workflow
 
 - **Finding relationships**: Discover which variables are related
 - **Feature selection**: Identify redundant variables for modeling

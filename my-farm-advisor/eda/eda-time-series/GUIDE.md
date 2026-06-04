@@ -1,8 +1,8 @@
-# Skill: eda-time-series
+# Workflow: eda-time-series
 
 ## Description
 
-This skill analyzes time-based agricultural data to identify trends, seasonality, and patterns over time. Create time series plots, calculate rolling averages, detect anomalies, and forecast future values. Perfect for understanding weather patterns, crop development cycles, and seasonal field conditions without time-series coding.
+This workflow analyzes time-based agricultural data to identify trends, seasonality, and patterns over time. Create time series plots, calculate rolling averages, detect anomalies, and forecast future values. Perfect for understanding weather patterns, crop development cycles, and seasonal field conditions without time-series coding.
 
 ## Requirements
 
