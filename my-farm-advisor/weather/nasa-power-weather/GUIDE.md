@@ -387,4 +387,4 @@ field_id, lat, lon, date, T2M, T2M_MAX, T2M_MIN, PRECTOTCORR, ALLSKY_SFC_SW_DWN,
 - [NASA POWER Data Access Viewer](https://power.larc.nasa.gov/data-access-viewer/)
 - [API Parameter Dictionary](https://power.larc.nasa.gov/docs/methodology/communities/ag/)
 - [Growing Degree Days (UMN Extension)](https://www.extension.umn.edu/agriculture/climate/growing-degree-days/)
-- [field-boundaries skill](../.skills/field-boundaries/) — source of sample field coordinates
+- [field-boundaries skill](../../field-management/field-boundaries/) — source of sample field coordinates

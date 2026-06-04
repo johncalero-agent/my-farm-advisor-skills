@@ -88,10 +88,10 @@ data/my-farm-advisor/
 └── shared/
 ```
 
-Representative metadata files already live in the skill tree:
+Representative metadata files are generated into the runtime data tree when the pipeline runs:
 
-- grower metadata: [`data/my-farm-advisor/growers/iowa-demo-grower/grower.json`](data/my-farm-advisor/growers/iowa-demo-grower/grower.json)
-- farm metadata: [`data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/farm.json`](data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/farm.json)
+- grower metadata: `data/my-farm-advisor/growers/iowa-demo-grower/grower.json`
+- farm metadata: `data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/farm.json`
 
 ## Deterministic Pipeline Entry Points
 
