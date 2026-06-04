@@ -23,32 +23,27 @@ from rasterio.warp import Resampling, reproject
 
 matplotlib.use("Agg")
 
-_REPO = Path(__file__).resolve().parents[4]
-_LIB = _REPO / "data" / "my-farm-advisor" / "scripts" / "lib"
-_FIELD_INVENTORY = _REPO / os.environ.get(
-    "AG_INVENTORY_CSV",
-    "data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/manifests/field-inventory.csv",
-)
+_LOCAL_LIB = Path(__file__).resolve().parents[1] / "lib"
+sys.path.insert(0, str(_LOCAL_LIB))
+
+from runtime_paths import resolve_runtime_paths  # noqa: E402
+
+_RUNTIME_PATHS = resolve_runtime_paths()
+_REPO = _RUNTIME_PATHS.runtime_base
+_SCRIPTS = _RUNTIME_PATHS.runtime_scripts
+_LIB = _RUNTIME_PATHS.runtime_scripts / "lib"
+sys.path.insert(0, str(_SCRIPTS))
+sys.path.insert(0, str(_LIB))
 _DEFAULT_GROWER = os.environ.get("AG_GROWER_SLUG", "iowa-demo-grower")
 _DEFAULT_FARM = os.environ.get("AG_FARM_SLUG", "iowa-demo-farm")
 _DEFAULT_FARM_NAME = os.environ.get("AG_FARM_NAME", "Iowa Demo Farm")
+_DEFAULT_INVENTORY = _REPO / "growers" / _DEFAULT_GROWER / "farms" / _DEFAULT_FARM / "manifests" / "field-inventory.csv"
+_FIELD_INVENTORY = Path(os.environ.get("AG_INVENTORY_CSV", str(_DEFAULT_INVENTORY)))
+
+from reporting_bootstrap import ensure_skill_path  # noqa: E402
 
 
-def _ensure_skill_path(skill_name: str) -> Path:
-    matches = sorted(
-        (_REPO / "skills" / "my-farm-advisor").glob(f"**/{skill_name}/src")
-    )
-    if not matches:
-        raise FileNotFoundError(f"Skill source path not found for '{skill_name}'")
-    skill_path = matches[0]
-    skill_path_str = str(skill_path)
-    if skill_path_str not in sys.path:
-        sys.path.insert(0, skill_path_str)
-    return skill_path
-
-
-_ensure_skill_path("farm-intelligence-reporting")
-sys.path.insert(0, str(_LIB))
+ensure_skill_path("farm-intelligence-reporting")
 
 from pipeline import (  # noqa: E402
     FieldReportingConfig,
@@ -58,9 +53,11 @@ from pipeline import (  # noqa: E402
 )  # pyright: ignore[reportMissingImports]
 from paths import (  # noqa: E402
     farm_boundary_path,
+    field_dir,
     field_boundary_path,
     field_feature_path,
     field_manifest_dir,
+    field_satellite_dir,
     field_summary_path,
     field_tables_dir,
     shared_cdl_raster_dir,
@@ -113,24 +110,14 @@ def _field_slug_lookup(inventory_path: Path = _FIELD_INVENTORY) -> dict[str, str
 
 
 def _field_root(field_slug: str) -> Path:
-    return (
-        _REPO
-        / "data"
-        / "my-farm-advisor"
-        / "growers"
-        / _DEFAULT_GROWER
-        / "farms"
-        / _DEFAULT_FARM
-        / "fields"
-        / field_slug
-    )
+    return field_dir(_DEFAULT_GROWER, _DEFAULT_FARM, field_slug)
 
 
 def _sensor_manifest_paths(field_slug: str) -> list[Path]:
-    field_root = _field_root(field_slug)
+    satellite_root = field_satellite_dir(_DEFAULT_GROWER, _DEFAULT_FARM, field_slug)
     return [
-        field_root / "satellite" / "sentinel" / "manifest.json",
-        field_root / "satellite" / "landsat" / "manifest.json",
+        satellite_root / "sentinel" / "manifest.json",
+        satellite_root / "landsat" / "manifest.json",
     ]
 
 

@@ -16,28 +16,25 @@ import pandas as pd
 
 matplotlib.use("Agg")
 
-_REPO = Path(__file__).resolve().parents[4]
-_LIB = _REPO / "data" / "my-farm-advisor" / "scripts" / "lib"
+_LOCAL_LIB = Path(__file__).resolve().parents[1] / "lib"
+sys.path.insert(0, str(_LOCAL_LIB))
 
+from runtime_paths import resolve_runtime_paths  # noqa: E402
 
-def _ensure_skill_path(skill_name: str) -> Path:
-    matches = sorted(
-        (_REPO / "skills" / "my-farm-advisor").glob(f"**/{skill_name}/src")
-    )
-    if not matches:
-        raise FileNotFoundError(f"Skill source path not found for '{skill_name}'")
-    skill_path = matches[0]
-    skill_path_str = str(skill_path)
-    if skill_path_str not in sys.path:
-        sys.path.insert(0, skill_path_str)
-    return skill_path
-
-
-_ensure_skill_path("farm-intelligence-reporting")
-_ensure_skill_path("headlands-ring")
-_ensure_skill_path("cdl-cropland")
-_ensure_skill_path("nasa-power-weather")
+_RUNTIME_PATHS = resolve_runtime_paths()
+_REPO = _RUNTIME_PATHS.runtime_base
+_SCRIPTS = _RUNTIME_PATHS.runtime_scripts
+_LIB = _RUNTIME_PATHS.runtime_scripts / "lib"
+sys.path.insert(0, str(_SCRIPTS))
 sys.path.insert(0, str(_LIB))
+
+from reporting_bootstrap import ensure_skill_path  # noqa: E402
+
+
+ensure_skill_path("farm-intelligence-reporting")
+ensure_skill_path("headlands-ring")
+ensure_skill_path("cdl-cropland")
+ensure_skill_path("nasa-power-weather")
 
 from cdl_reporting import plot_crop_mix_stacked_100, summarize_crop_history
 from headlands_ring import split_headlands_and_interior, summarize_headlands
@@ -72,10 +69,8 @@ _DEFAULT_FARM_NAME = os.environ.get("AG_FARM_NAME", "Iowa Demo Farm")
 _SCRIPT = Path(__file__)
 _CDL_PRIMARY = farm_cdl_preferred_full_composition_path(_DEFAULT_GROWER, _DEFAULT_FARM)
 _CDL_FALLBACK = shared_cdl_preferred_full_composition_path()
-_FIELD_INVENTORY = _REPO / os.environ.get(
-    "AG_INVENTORY_CSV",
-    "data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/manifests/field-inventory.csv",
-)
+_DEFAULT_INVENTORY = _REPO / "growers" / _DEFAULT_GROWER / "farms" / _DEFAULT_FARM / "manifests" / "field-inventory.csv"
+_FIELD_INVENTORY = Path(os.environ.get("AG_INVENTORY_CSV", str(_DEFAULT_INVENTORY)))
 
 
 def _utm(frow) -> str:
