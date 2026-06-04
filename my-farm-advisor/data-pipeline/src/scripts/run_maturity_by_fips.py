@@ -1,4 +1,5 @@
 from __future__ import annotations
+# pyright: reportMissingImports=false
 
 import argparse
 import importlib
@@ -9,9 +10,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _SCRIPTS_DIR.parents[2]
 sys.path.insert(0, str(_SCRIPTS_DIR))
 sys.path.insert(0, str(_SCRIPTS_DIR / "lib"))
+
+from paths import DATA_ROOT, SCRIPTS_ROOT
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,7 +60,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def _run_step(command: list[str]) -> None:
-    result = subprocess.run(command, check=False)
+    result = subprocess.run(command, cwd=str(DATA_ROOT), check=False)
     if result.returncode != 0:
         raise SystemExit(result.returncode)
 
@@ -67,8 +69,11 @@ def _iso_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
-def _repo_relative(path: Path) -> str:
-    return str(path.resolve().relative_to(_REPO_ROOT))
+def _runtime_relative(path: Path) -> str:
+    try:
+        return str(path.resolve(strict=False).relative_to(DATA_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def _module(name: str):
@@ -91,6 +96,8 @@ def main() -> int:
     annual_maturity_config_cls = maturity_module.AnnualMaturityConfig
     build_year_output_index = maturity_module.build_year_output_index
     shared_manifest_dir = paths_module.shared_manifest_dir
+    shared_corn_maturity_metadata_dir = paths_module.shared_corn_maturity_metadata_dir
+    shared_soybean_maturity_metadata_dir = paths_module.shared_soybean_maturity_metadata_dir
 
     config = annual_maturity_config_cls(
         year=args.year, weather_source=args.weather_source
@@ -122,7 +129,7 @@ def main() -> int:
             [geoadmin_output],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/ingest/download_geoadmin.py",
+                str(SCRIPTS_ROOT / "ingest" / "download_geoadmin.py"),
                 "--levels",
                 "l0_countries",
                 "l1_states",
@@ -132,7 +139,7 @@ def main() -> int:
         (
             "field-fips",
             [field_fips_output],
-            [sys.executable, "data/my-farm-advisor/scripts/ingest/assign_field_fips.py"],
+            [sys.executable, str(SCRIPTS_ROOT / "ingest" / "assign_field_fips.py")],
         ),
         (
             "county-weather",
@@ -142,7 +149,7 @@ def main() -> int:
             ],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/ingest/aggregate_weather_by_fips.py",
+                str(SCRIPTS_ROOT / "ingest" / "aggregate_weather_by_fips.py"),
                 "--year",
                 str(args.year),
                 "--weather-source",
@@ -159,12 +166,13 @@ def main() -> int:
             "county-gdd",
             [
                 Path(output_index["corn_gdd"]),
-                _REPO_ROOT
-                / f"data/my-farm-advisor/shared/corn_maturity/metadata/my-farm-advisor/gdd_by_fips_{args.year}.json",
+                shared_corn_maturity_metadata_dir()
+                / "my-farm-advisor"
+                / f"gdd_by_fips_{args.year}.json",
             ],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/ingest/calculate_gdd_by_fips.py",
+                str(SCRIPTS_ROOT / "ingest" / "calculate_gdd_by_fips.py"),
                 "--year",
                 str(args.year),
                 "--weather-source",
@@ -176,12 +184,13 @@ def main() -> int:
             [
                 Path(output_index["corn_rm"]),
                 Path(output_index["corn_rm_csv"]),
-                _REPO_ROOT
-                / f"data/my-farm-advisor/shared/corn_maturity/metadata/my-farm-advisor/rm_by_fips_{args.year}.json",
+                shared_corn_maturity_metadata_dir()
+                / "my-farm-advisor"
+                / f"rm_by_fips_{args.year}.json",
             ],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/ingest/calculate_corn_rm_by_fips.py",
+                str(SCRIPTS_ROOT / "ingest" / "calculate_corn_rm_by_fips.py"),
                 "--year",
                 str(args.year),
             ],
@@ -191,12 +200,13 @@ def main() -> int:
             [
                 Path(output_index["soybean_mg"]),
                 Path(output_index["soybean_mg_csv"]),
-                _REPO_ROOT
-                / f"data/my-farm-advisor/shared/soybean_maturity/metadata/my-farm-advisor/mg_by_fips_{args.year}.json",
+                shared_soybean_maturity_metadata_dir()
+                / "my-farm-advisor"
+                / f"mg_by_fips_{args.year}.json",
             ],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/ingest/calculate_soybean_mg_by_fips.py",
+                str(SCRIPTS_ROOT / "ingest" / "calculate_soybean_mg_by_fips.py"),
                 "--year",
                 str(args.year),
             ],
@@ -209,7 +219,7 @@ def main() -> int:
             ],
             [
                 sys.executable,
-                "data/my-farm-advisor/scripts/reporting/generate_maturity_maps.py",
+                str(SCRIPTS_ROOT / "reporting" / "generate_maturity_maps.py"),
                 "--year",
                 str(args.year),
             ],
@@ -227,10 +237,10 @@ def main() -> int:
             step_record.update(
                 {
                     "status": "skipped",
-                    "output_path": _repo_relative(primary_output)
+                    "output_path": _runtime_relative(primary_output)
                     if primary_output is not None
                     else None,
-                    "output_paths": [_repo_relative(path) for path in output_paths],
+                    "output_paths": [_runtime_relative(path) for path in output_paths],
                     "updated_at": _iso_now(),
                 }
             )
@@ -241,10 +251,10 @@ def main() -> int:
         step_record.update(
             {
                 "status": "complete",
-                "output_path": _repo_relative(primary_output)
+                "output_path": _runtime_relative(primary_output)
                 if primary_output is not None
                 else None,
-                "output_paths": [_repo_relative(path) for path in output_paths],
+                "output_paths": [_runtime_relative(path) for path in output_paths],
                 "updated_at": _iso_now(),
             }
         )

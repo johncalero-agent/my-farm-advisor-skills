@@ -3,8 +3,8 @@
 run_farm_pipeline.py — Master pipeline entrypoint.
 
 Usage:
-    python data/my-farm-advisor/scripts/run_farm_pipeline.py \\
-        --boundaries data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/boundary/field_boundaries.geojson \\
+    python src/scripts/run_farm_pipeline.py \\
+        --boundaries growers/iowa-demo-grower/farms/iowa-demo-farm/boundary/field_boundaries.geojson \\
         [--farm-name "Iowa Demo Farm"] \\
         [--force]
 
@@ -12,10 +12,10 @@ Runs the full farm intelligence reporting pipeline from a single field
 boundaries GeoJSON file.  Each step is idempotent and will be skipped if
 inputs, code, and config are unchanged since the last run.
 
-Outputs:
-    data/my-farm-advisor/growers/.../fields/.../derived/reports/    — one per field
-    data/my-farm-advisor/growers/.../derived/reports/               — farm poster, HTML, and Markdown
-    data/my-farm-advisor/growers/.../manifests/                     — canonical per-step manifests
+Outputs under the configured runtime root:
+    growers/.../fields/.../derived/reports/    — one per field
+    growers/.../derived/reports/               — farm poster, HTML, and Markdown
+    growers/.../manifests/                     — canonical per-step manifests
 """
 
 from __future__ import annotations
@@ -34,11 +34,25 @@ from bootstrap_runtime import ensure_runtime_environment
 
 ensure_runtime_environment()
 
-from lib.paths import farm_boundary_path, farm_report_asset_path, grower_manifest_path
+from lib.paths import farm_boundary_path, farm_manifest_dir, farm_report_asset_path, grower_manifest_path
+from lib.runtime_paths import resolve_runtime_paths
 from reporting_bootstrap import ensure_canonical_data_tree
 
-_REPO = Path(__file__).resolve().parents[3]
-_SCRIPTS = Path(__file__).parent
+_RUNTIME_PATHS = resolve_runtime_paths()
+_RUNTIME_BASE = _RUNTIME_PATHS.runtime_base
+_SCRIPTS = _RUNTIME_PATHS.runtime_scripts
+
+
+def _runtime_path(path: str | Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else _RUNTIME_BASE / candidate
+
+
+def _runtime_relative(path: Path) -> str:
+    try:
+        return str(path.resolve(strict=False).relative_to(_RUNTIME_BASE))
+    except ValueError:
+        return str(path)
 
 
 def _load_json(path: Path) -> dict:
@@ -130,7 +144,7 @@ def _run(script: str, extra_env: dict | None = None) -> bool:
     env = os.environ.copy()
     if extra_env:
         env.update({str(key): str(value) for key, value in extra_env.items()})
-    result = subprocess.run(cmd, cwd=str(_REPO), capture_output=False, env=env)
+    result = subprocess.run(cmd, cwd=str(_RUNTIME_BASE), capture_output=False, env=env)
     elapsed = time.monotonic() - t0
     status = "ok" if result.returncode == 0 else "FAILED"
     print(f"  {status}  ({elapsed:.1f}s)  {script}")
@@ -149,7 +163,7 @@ def main() -> None:
     parser.add_argument("--farm-slug", default="iowa-demo-farm")
     parser.add_argument(
         "--inventory-csv",
-        default="data/my-farm-advisor/growers/iowa-demo-grower/farms/iowa-demo-farm/manifests/field-inventory.csv",
+        default=None,
         help="Path to field inventory CSV with field_id,field_slug",
     )
     parser.add_argument(
@@ -164,12 +178,17 @@ def main() -> None:
         help="Create and verify canonical data tree, then exit",
     )
     args = parser.parse_args()
+    inventory_path = (
+        _runtime_path(args.inventory_csv)
+        if args.inventory_csv
+        else farm_manifest_dir(args.grower_slug, args.farm_slug) / "field-inventory.csv"
+    )
 
     field_slugs = ensure_canonical_data_tree(
         grower_slug=args.grower_slug,
         farm_slug=args.farm_slug,
         farm_name=args.farm_name,
-        inventory_path=_REPO / args.inventory_csv,
+        inventory_path=inventory_path,
     )
     if field_slugs:
         print(f"Canonical tree ensured for {len(field_slugs)} fields")
@@ -181,7 +200,7 @@ def main() -> None:
         return
 
     boundaries = (
-        Path(args.boundaries)
+        _runtime_path(args.boundaries)
         if args.boundaries
         else farm_boundary_path(args.grower_slug, args.farm_slug)
     )
@@ -230,7 +249,7 @@ def main() -> None:
         "AG_GROWER_SLUG": args.grower_slug,
         "AG_FARM_SLUG": args.farm_slug,
         "AG_FARM_NAME": args.farm_name,
-        "AG_INVENTORY_CSV": args.inventory_csv,
+        "AG_INVENTORY_CSV": str(inventory_path),
         "AG_BOUNDARIES": str(boundaries),
     }
     if args.weather_csv:
@@ -279,7 +298,7 @@ def main() -> None:
         for extension in ("png", "html", "md"):
             output = farm_report_asset_path(args.grower_slug, args.farm_slug, extension)
             if output.exists():
-                print(f"    {output.relative_to(_REPO)}")
+                print(f"    {_runtime_relative(output)}")
     print("=" * 60)
     print()
 

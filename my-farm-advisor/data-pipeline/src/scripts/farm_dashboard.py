@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# pyright: reportMissingImports=false
+# pyright: reportMissingImports=false, reportArgumentType=false, reportCallIssue=false, reportAttributeAccessIssue=false
 """One-command farm dashboard orchestration.
 
 Subcommands:
@@ -22,28 +22,34 @@ import rasterio
 from rasterstats import zonal_stats
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPTS_DIR.parents[2]
 sys.path.insert(0, str(SCRIPTS_DIR))
 sys.path.insert(0, str(SCRIPTS_DIR / "lib"))
 
 from naming import field_slug_from_id
-from paths import farm_boundary_path, shared_cdl_raster_dir
-
-COUNTIES_PATH = (
-    REPO_ROOT
-    / "data"
-    / "my-farm-advisor"
-    / "shared"
-    / "geoadmin"
-    / "l2_counties"
-    / "counties_usa.geojson"
+from paths import (
+    DATA_ROOT,
+    GROWERS_ROOT,
+    SCRIPTS_ROOT,
+    farm_boundary_path,
+    farm_manifest_dir,
+    shared_cdl_raster_dir,
+    shared_geoadmin_counties_dir,
 )
+
+COUNTIES_PATH = shared_geoadmin_counties_dir() / "counties_usa.geojson"
 NON_CONTIGUOUS = {"02", "15", "60", "66", "69", "72", "78"}
 CROP_CODE = {"corn": 1, "soybeans": 5, "wheat": 24, "cotton": 2}
 
 
+def _runtime_relative(path: Path) -> str:
+    try:
+        return str(path.resolve(strict=False).relative_to(DATA_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _run(command: list[str]) -> None:
-    subprocess.run(command, cwd=str(REPO_ROOT), check=True)
+    subprocess.run(command, cwd=str(DATA_ROOT), check=True)
 
 
 def _ensure_counties() -> None:
@@ -51,8 +57,8 @@ def _ensure_counties() -> None:
         return
     _run(
         [
-            "python",
-            "data/my-farm-advisor/scripts/ingest/download_geoadmin.py",
+            sys.executable,
+            str(SCRIPTS_ROOT / "ingest" / "download_geoadmin.py"),
             "--levels",
             "l2_counties",
         ]
@@ -193,18 +199,8 @@ def _field_allocation(total_fields: int, county_count: int) -> list[int]:
     return values
 
 
-def _inventory_path_for_farm(farm_slug: str) -> Path:
-    return (
-        REPO_ROOT
-        / "data"
-        / "my-farm-advisor"
-        / "growers"
-        / grower_slug
-        / "farms"
-        / farm_slug
-        / "manifests"
-        / "field-inventory.csv"
-    )
+def _inventory_path_for_farm(grower_slug: str, farm_slug: str) -> Path:
+    return farm_manifest_dir(grower_slug, farm_slug) / "field-inventory.csv"
 
 
 def _run_bootstrap_for_counties(
@@ -216,13 +212,13 @@ def _run_bootstrap_for_counties(
     farm_slug: str,
     farm_name: str,
 ) -> Path:
-    inventory_path = _inventory_path_for_farm(farm_slug)
+    inventory_path = _inventory_path_for_farm(grower_slug, farm_slug)
     distribution = _field_allocation(field_count, len(counties))
 
     for idx, county in enumerate(counties):
         cmd = [
-            "python",
-            "data/my-farm-advisor/scripts/ingest/bootstrap_farm_from_county.py",
+            sys.executable,
+            str(SCRIPTS_ROOT / "ingest" / "bootstrap_farm_from_county.py"),
             "--state-fips",
             county["state_fips"],
             "--county-name",
@@ -238,7 +234,7 @@ def _run_bootstrap_for_counties(
             "--farm-name",
             farm_name,
             "--inventory-csv",
-            str(inventory_path.relative_to(REPO_ROOT)),
+            str(inventory_path),
         ]
         if idx > 0:
             cmd.append("--append")
@@ -256,10 +252,10 @@ def _run_pipeline_for_farm(
     force: bool,
 ) -> None:
     cmd = [
-        "python",
-        "data/my-farm-advisor/scripts/run_farm_pipeline.py",
+        sys.executable,
+        str(SCRIPTS_ROOT / "run_farm_pipeline.py"),
         "--boundaries",
-        str(farm_boundary_path(grower_slug, farm_slug).relative_to(REPO_ROOT)),
+        str(farm_boundary_path(grower_slug, farm_slug)),
         "--grower-slug",
         grower_slug,
         "--farm-slug",
@@ -267,7 +263,7 @@ def _run_pipeline_for_farm(
         "--farm-name",
         farm_name,
         "--inventory-csv",
-        str(inventory_path.relative_to(REPO_ROOT)),
+        str(inventory_path),
     ]
     if force:
         cmd.append("--force")
@@ -326,7 +322,7 @@ def create_command(args: argparse.Namespace) -> None:
                 "field_count_requested": args.field_count,
                 "grower_slug": args.grower_slug,
                 "farm_slug": args.farm_slug,
-                "inventory_csv": str(inventory.relative_to(REPO_ROOT)),
+                "inventory_csv": _runtime_relative(inventory),
             },
             indent=2,
         )
@@ -348,9 +344,8 @@ def _ensure_inventory_for_boundary(boundary_path: Path, inventory_path: Path) ->
 def _discover_farms(
     scope: str, grower_slug: str | None, farm_slug: str | None
 ) -> list[dict[str, str]]:
-    growers_root = REPO_ROOT / "data" / "my-farm-advisor" / "growers"
     farms: list[dict[str, str]] = []
-    for grower_dir in sorted(growers_root.glob("*")):
+    for grower_dir in sorted(GROWERS_ROOT.glob("*")):
         if not grower_dir.is_dir():
             continue
         g_slug = grower_dir.name
@@ -381,7 +376,7 @@ def refresh_command(args: argparse.Namespace) -> None:
     farms = _discover_farms(args.scope, args.grower_slug, args.farm_slug)
     for item in farms:
         boundary = farm_boundary_path(item["grower_slug"], item["farm_slug"])
-        inventory = _inventory_path_for_farm(item["farm_slug"])
+        inventory = _inventory_path_for_farm(item["grower_slug"], item["farm_slug"])
         _ensure_inventory_for_boundary(boundary, inventory)
         _run_pipeline_for_farm(
             grower_slug=item["grower_slug"],
