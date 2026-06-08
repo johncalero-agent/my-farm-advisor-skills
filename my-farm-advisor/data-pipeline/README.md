@@ -12,10 +12,16 @@ cd my-farm-advisor/data-pipeline
 ./scripts/install.sh
 cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
 "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
-  scripts/run_farm_pipeline.py \
-  --grower-slug il-champaign-grower \
-  --farm-slug champaign-demo-farm \
-  --seed 77 --count 5 --force
+  scripts/ingest/bootstrap_farm_from_county.py \
+  --state-fips 17 \
+  --county-name DeKalb \
+  --count 5 \
+  --seed 77 \
+  --grower-slug il-dekalb-grower \
+  --farm-slug dekalb-demo-farm \
+  --farm-name "DeKalb Demo Farm" \
+  --run-pipeline \
+  --force
 ```
 
 `DATA_PIPELINE_DATA_ROOT` is required. Set it to an absolute writable path outside the skill checkout before running the installer or any pipeline entrypoint. There is no implicit fallback to a platform workspace path or to a checkout-local `data/` directory.
