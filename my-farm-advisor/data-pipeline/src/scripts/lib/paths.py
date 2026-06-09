@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 try:
@@ -114,12 +115,21 @@ def farm_soil_sample_basename(farm_slug: str) -> str:
     return f"{_normalized_farm_artifact_prefix(farm_slug)}_fields_soil.csv"
 
 
+def _weather_year_from_env(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return int(raw)
+
+
 def farm_weather_path(
     grower_slug: str,
     farm_slug: str,
-    start_year: int = 2021,
-    end_year: int = 2025,
+    start_year: int | None = None,
+    end_year: int | None = None,
 ) -> Path:
+    start_year = start_year or _weather_year_from_env("AG_WEATHER_START_YEAR", 2021)
+    end_year = end_year or _weather_year_from_env("AG_WEATHER_END_YEAR", 2025)
     return farm_table_path(
         grower_slug, farm_slug, farm_weather_basename(farm_slug, start_year, end_year)
     )

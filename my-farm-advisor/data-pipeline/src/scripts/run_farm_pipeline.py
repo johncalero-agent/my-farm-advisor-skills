@@ -55,6 +55,13 @@ def _runtime_relative(path: Path) -> str:
         return str(path)
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return int(raw)
+
+
 def _load_json(path: Path) -> dict:
     if not path.exists():
         return {}
@@ -171,6 +178,30 @@ def main() -> None:
         default=None,
         help="Optional canonical weather CSV override",
     )
+    parser.add_argument(
+        "--weather-backend",
+        choices=["zarr", "api"],
+        default=os.environ.get("AG_WEATHER_BACKEND", "zarr"),
+        help="Farm weather backend; zarr samples NASA POWER S3 at field centroids by default",
+    )
+    parser.add_argument(
+        "--weather-start-year",
+        type=int,
+        default=_env_int("AG_WEATHER_START_YEAR", 2021),
+        help="First farm weather year",
+    )
+    parser.add_argument(
+        "--weather-end-year",
+        type=int,
+        default=_env_int("AG_WEATHER_END_YEAR", 2025),
+        help="Last farm weather year",
+    )
+    parser.add_argument(
+        "--weather-time-standard",
+        choices=["lst", "utc"],
+        default=os.environ.get("AG_WEATHER_TIME_STANDARD", "lst"),
+        help="NASA POWER time standard for farm weather outputs",
+    )
     parser.add_argument("--force", action="store_true", help="Force rerun all steps")
     parser.add_argument(
         "--structure-test",
@@ -178,6 +209,9 @@ def main() -> None:
         help="Create and verify canonical data tree, then exit",
     )
     args = parser.parse_args()
+    if args.weather_start_year > args.weather_end_year:
+        print("ERROR: --weather-start-year must be <= --weather-end-year")
+        sys.exit(1)
     inventory_path = (
         _runtime_path(args.inventory_csv)
         if args.inventory_csv
@@ -251,9 +285,13 @@ def main() -> None:
         "AG_FARM_NAME": args.farm_name,
         "AG_INVENTORY_CSV": str(inventory_path),
         "AG_BOUNDARIES": str(boundaries),
+        "AG_WEATHER_BACKEND": args.weather_backend,
+        "AG_WEATHER_START_YEAR": str(args.weather_start_year),
+        "AG_WEATHER_END_YEAR": str(args.weather_end_year),
+        "AG_WEATHER_TIME_STANDARD": args.weather_time_standard,
     }
     if args.weather_csv:
-        extra_env["AG_WEATHER_CSV"] = args.weather_csv
+        extra_env["AG_WEATHER_CSV"] = str(_runtime_path(args.weather_csv))
     if args.force:
         extra_env["AG_FORCE"] = "1"
     for script, label in steps:
