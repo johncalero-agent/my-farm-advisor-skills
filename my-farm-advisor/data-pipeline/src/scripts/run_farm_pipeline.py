@@ -276,6 +276,7 @@ def main() -> None:
         ("reporting/generate_ssurgo_cards.py", "SSURGO soil profile cards"),
         ("reporting/generate_farm_html.py", "Self-contained HTML report"),
         ("reporting/generate_farm_markdown.py", "Markdown report"),
+        ("reporting/generate_grower_web_map.py", "Grower web map"),
     ]
 
     all_ok = True
