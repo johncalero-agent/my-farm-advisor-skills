@@ -1,4 +1,14 @@
-"""DEM terrain contract constants, schema helpers, source resolver, and raster helpers."""
+"""DEM terrain contract constants, schema helpers, source resolver, raster helpers, and terrain derivatives."""
+
+from .terrain_derivatives import (
+    ADVISORY_HYDROLOGY_WARNING,
+    CONDITIONING_RICHDEM_FILL,
+    CONDITIONING_SKIPPED_BACKEND_UNAVAILABLE,
+    FLAT_TERRAIN_LIMITED_FLOW_WARNING,
+    TerrainDerivativeResult,
+    TerrainProductRecord,
+    derive_terrain_products,
+)
 
 from .raster_processing import (
     DEFAULT_BUFFER_METERS,
@@ -158,6 +168,7 @@ __all__ = [
     "ADAPTER_REGISTERED_REGIONAL",
     "ADAPTER_SRTM_COMPATIBLE",
     "ADAPTER_USGS_TNM",
+    "ADVISORY_HYDROLOGY_WARNING",
     "ALOSAW3D30Adapter",
     "AnalysisGeometry",
     "GlobalDEMAssetReference",
@@ -167,6 +178,8 @@ __all__ = [
     "CLIPPED_DEM_FILENAME",
     "COARSE_FALLBACK_WARNING",
     "CONDITIONED_DEM_FILENAME",
+    "CONDITIONING_RICHDEM_FILL",
+    "CONDITIONING_SKIPPED_BACKEND_UNAVAILABLE",
     "DEFAULT_BUFFER_METERS",
     "DEFAULT_FIELD_CRS",
     "DATA_PIPELINE_DATA_ROOT_ENV",
@@ -181,6 +194,7 @@ __all__ = [
     "FALLBACK_LARGE_DOWNLOAD_BLOCKED",
     "FALLBACK_MANUAL_OR_SERVICE_LIMITED",
     "FIELD_DEM_ROOT_TEMPLATE",
+    "FLAT_TERRAIN_LIMITED_FLOW_WARNING",
     "ILLINOIS_BBOX_WGS84",
     "ILHMP_ACCESS_NOTE",
     "ILHMP_CITATION",
@@ -253,6 +267,8 @@ __all__ = [
     "SourceRankingPolicy",
     "SourceSelection",
     "SummaryDefinition",
+    "TerrainDerivativeResult",
+    "TerrainProductRecord",
     "USGSTNMAdapter",
     "USGSTNMDownloadRecord",
     "USGSTNMProduct",
@@ -265,6 +281,7 @@ __all__ = [
     "candidate_provenance",
     "clip_dem_tiles_to_buffer",
     "discover_illinois_context",
+    "derive_terrain_products",
     "download_with_retries",
     "estimate_county_context",
     "file_size",

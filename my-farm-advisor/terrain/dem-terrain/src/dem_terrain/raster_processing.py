@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence, cast
@@ -311,17 +312,24 @@ def write_raster_atomic(
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = output.with_name(f"{output.name}.part")
-    if temp_path.exists():
-        temp_path.unlink()
+    if output.is_symlink():
+        raise ValueError(f"Refusing to overwrite symlink raster output: {output}")
+    temp_path: Path | None = None
     try:
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{output.name}.",
+            suffix=".part",
+            dir=output.parent,
+            delete=False,
+        ) as temp_file:
+            temp_path = Path(temp_file.name)
         with rasterio.open(temp_path, "w", **profile) as dst:
             dst.write(array)
             if tags:
                 dst.update_tags(**tags)
         os.replace(temp_path, output)
     except Exception:
-        if temp_path.exists():
+        if temp_path is not None and temp_path.exists():
             temp_path.unlink()
         raise
     return output
