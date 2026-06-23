@@ -111,6 +111,7 @@ def _generate_html(
     grower_slug: str,
     farm_slug: str,
     farm_name: str,
+    headlands_geojson: dict | None = None,
 ) -> str:
     raw_features = geojson_data.get("features", [])
     field_count = len(raw_features)
@@ -150,6 +151,8 @@ def _generate_html(
     fields_meta_json = json.dumps(fields_meta)
     geojson_json = json.dumps(geojson_data)
     display_order_json = json.dumps(display_order)
+    has_headlands = headlands_geojson is not None and headlands_geojson.get("features")
+    headlands_json = json.dumps(headlands_geojson) if has_headlands else "null"
 
     if fields_meta:
         center_lat = sum(f["lat"] for f in fields_meta) / len(fields_meta)
@@ -337,6 +340,7 @@ def _generate_html(
         <span class="control-label">Visibility</span>
         <button class="toggle-btn" id="toggleAllBtn">Hide All</button>
       </div>
+      {f'<div class="control-row"><span class="control-label">Headlands</span><button class="toggle-btn" id="toggleHeadlandsBtn">Hide</button></div>' if has_headlands else ''}
     </div>
     <button class="fit-all-btn" onclick="fitAllFields()">Fit All Fields</button>
     <div id="field-list"></div>
@@ -348,6 +352,8 @@ def _generate_html(
   var fieldMeta = {fields_meta_json};
   var geojsonData = {geojson_json};
   var displayOrder = {display_order_json};
+  var headlandsData = {headlands_json};
+  var hasHeadlands = headlandsData !== null;
 
   var map = L.map('map', {{ zoomControl: true }}).setView([{center_lat}, {center_lon}], 12);
 
@@ -445,6 +451,33 @@ def _generate_html(
       labelMarkers.push({{ marker: label, idx: idx }});
     }}
   }}).addTo(map);
+
+  // Headlands overlay layer
+  var headlandsLayer = null;
+  var headlandsVisible = true;
+  if (hasHeadlands) {{
+    headlandsLayer = L.geoJSON(headlandsData, {{
+      style: {{
+        color: '#FF5722',
+        weight: 2,
+        opacity: 0.7,
+        fillColor: '#FF5722',
+        fillOpacity: 0.1,
+        dashArray: '8, 6'
+      }},
+      onEachFeature: function(feature, layer) {{
+        var props = feature.properties || {{}};
+        var popupHtml = '<div style="min-width:180px;">' +
+          '<div style="font-weight:700;font-size:1rem;margin-bottom:8px;color:#FF5722;">🚜 Headlands Ring</div>' +
+          '<div class="popup-row"><span class="popup-label">Field</span><span class="popup-value">' + (props.field_id || 'N/A') + '</span></div>' +
+          '<div class="popup-row"><span class="popup-label">Area</span><span class="popup-value">' + (props.area_acres ? props.area_acres.toFixed(2) : 'N/A') + ' ac</span></div>' +
+          '<div class="popup-row"><span class="popup-label">Area (m²)</span><span class="popup-value">' + (props.area_m2 ? props.area_m2.toFixed(0) : 'N/A') + '</span></div>' +
+          '<div style="font-size:0.75rem;color:#999;margin-top:8px;font-style:italic;">Unplanted border strip for machinery turning</div>' +
+          '</div>';
+        layer.bindPopup(popupHtml);
+      }}
+    }}).addTo(map);
+  }}
 
   // Build sidebar
   var listEl = document.getElementById('field-list');
@@ -566,6 +599,20 @@ def _generate_html(
     }});
   }});
 
+  // Toggle headlands button
+  if (hasHeadlands) {{
+    var toggleHeadlandsBtn = document.getElementById('toggleHeadlandsBtn');
+    toggleHeadlandsBtn.addEventListener('click', function() {{
+      headlandsVisible = !headlandsVisible;
+      toggleHeadlandsBtn.textContent = headlandsVisible ? 'Hide' : 'Show';
+      if (headlandsVisible) {{
+        map.addLayer(headlandsLayer);
+      }} else {{
+        map.removeLayer(headlandsLayer);
+      }}
+    }});
+  }}
+
   function fitAllFields() {{
     if (geoLayer.getBounds().isValid()) {{
       map.fitBounds(geoLayer.getBounds().pad(0.1), {{ animate: true, duration: 0.5 }});
@@ -602,11 +649,24 @@ def generate_for_farm(
     geojson_data = json.loads(gdf.to_json())
     resolved_name = farm_name or farm_slug.replace("-", " ").title()
 
+    # Load headlands data if available
+    headlands_geojson = None
+    headlands_gpkg = _REPO / "growers" / grower_slug / "farms" / farm_slug / "derived" / "headlands" / f"{farm_slug}_headlands_4326.gpkg"
+    if headlands_gpkg.exists():
+        try:
+            headlands_gdf = gpd.read_file(headlands_gpkg)
+            if not headlands_gdf.empty:
+                headlands_geojson = json.loads(headlands_gdf.to_json())
+                print(f"    Headlands overlay loaded ({len(headlands_gdf)} rings)")
+        except Exception as exc:
+            print(f"    Warning: Could not load headlands: {exc}")
+
     html = _generate_html(
         geojson_data,
         grower_slug=grower_slug,
         farm_slug=farm_slug,
         farm_name=resolved_name,
+        headlands_geojson=headlands_geojson,
     )
 
     out_dir = _REPO / "growers" / grower_slug / "farms" / farm_slug / "derived" / "reports"
