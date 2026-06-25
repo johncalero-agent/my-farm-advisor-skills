@@ -134,6 +134,17 @@ tr:nth-child(even) { background: #f2f2f2; }
   <tr><td>CDL cropland</td><td>USDA NASS Cropland Data Layer</td><td>30 m</td><td>Annual, 2021–2025</td></tr>
 </table>
 </div>
+
+<h2>Analysis Levels</h2>
+<div class='section'>
+<p>This EDA compares data at three levels:</p>
+<ul>
+  <li><strong>Within a field:</strong> Weather variables (precipitation, GDD) across 5 years for individual fields. Visible in the annual bar charts and precip/GDD scatter.</li>
+  <li><strong>Across fields within a grower:</strong> Field size distributions, corn year frequency, and crop diversity within each grower's 10 fields. Visible in the histogram, boxplot, and corn years chart.</li>
+  <li><strong>Across growers:</strong> IL vs IA vs NE comparisons of climate, field scale, and crop composition. All grouped charts and the geospatial maps address this level.</li>
+</ul>
+<p><strong>Note:</strong> Soil analysis was not required for this assignment and was not included. The EDA focuses exclusively on field boundaries, weather, and CDL/cropland data layers.</p>
+</div>
 """)
 
     # Categories
