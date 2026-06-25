@@ -123,6 +123,19 @@ tr:nth-child(even) { background: #f2f2f2; }
     html_parts.append('<tr><td>NE</td><td>Phelps</td><td>10</td><td>31</td><td>774</td><td>7,742</td><td>565</td><td>2,241</td><td>Corn</td></tr>')
     html_parts.append('</tbody></table></div>')
 
+    # Data Sources
+    html_parts.append("""
+<h2>Data Sources</h2>
+<div class='section'>
+<table>
+  <tr><th>Dataset</th><th>Source</th><th>Spatial Resolution</th><th>Temporal Coverage</th></tr>
+  <tr><td>Field boundaries</td><td>OpenStreetMap / Overpass API</td><td>Individual field polygons</td><td>Static (current OSM snapshot)</td></tr>
+  <tr><td>Weather</td><td>NASA POWER (Zarr grid)</td><td>~0.5&deg; (~50 km)</td><td>Daily, 2021–2025</td></tr>
+  <tr><td>CDL cropland</td><td>USDA NASS Cropland Data Layer</td><td>30 m</td><td>Annual, 2021–2025</td></tr>
+</table>
+</div>
+""")
+
     # Categories
     for section_id, section_title in [
         ("field_boundaries", "Field Boundaries"),
@@ -162,6 +175,20 @@ tr:nth-child(even) { background: #f2f2f2; }
   <li><strong>Irrigation enables continuous corn:</strong> NE has more fields with 3-5 years of corn (out of 5) because irrigation buffers drought risk. IA and IL rotate corn-soy more frequently.</li>
   <li><strong>2022 drought signal:</strong> Nebraska's 2022 precipitation (392mm) was 31% below its 5-year mean. No corresponding yield penalty appears in CDL — consistent with irrigation adoption.</li>
   <li><strong>Corn+soy dominance:</strong> All three growers devote 75-99% of CDL-classified area to corn and soybeans. The Corn Belt label is well-earned.</li>
+</ol>
+</div>
+
+<h2>Limitations</h2>
+<div class='section'>
+<ol>
+  <li><strong>Small sample:</strong> 10 fields per state from one county each. Results may not generalize to entire states or other counties within the same state.</li>
+  <li><strong>Short time window:</strong> 5 years of weather and CDL data is insufficient for firm climate trend conclusions. Apparent patterns (e.g., NE drought year) should be interpreted as observations, not long-term shifts.</li>
+  <li><strong>Modeled weather:</strong> NASA POWER is a global reanalysis grid (~0.5&deg; resolution). Local precipitation and temperature extremes may be smoothed compared to on-site station data.</li>
+  <li><strong>Provisional 2025 CDL:</strong> The current-year Cropland Data Layer is preliminary and may be revised by USDA in subsequent releases.</li>
+  <li><strong>OSM boundary quality:</strong> OpenStreetMap farmland polygons are crowd-sourced and may contain omissions, misclassifications, or aggregated field groupings.</li>
+  <li><strong>Single county per state:</strong> One county cannot capture within-state diversity, such as northern versus southern Illinois climate or eastern versus western Nebraska rainfall gradients.</li>
+  <li><strong>Soil excluded:</strong> Soil properties influence both crop choice and drought response but were excluded per the assignment scope.</li>
+  <li><strong>Satellite imagery not included:</strong> Raw Sentinel-2 and Landsat scenes were not downloaded due to credential requirements, so NDVI-based vegetation health analysis was not possible.</li>
 </ol>
 </div>
 
