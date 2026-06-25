@@ -76,6 +76,8 @@ def osm_element_to_feature(element: dict, state_fips: str) -> dict | None:
 
     field_id = f"osm-{element['id']}"
     area_acres = polygon.area * (111320 ** 2) * abs(math.cos(math.radians(polygon.centroid.y))) / 4046.86
+    if area_acres < 25:
+        return None
     tags = element.get("tags", {})
 
     return {
@@ -156,6 +158,18 @@ def main():
     il_fields = fetch_fields(il_bboxes, "17", "IL")
     print(f"  Illinois: {len(il_fields)} fields selected")
 
+    # ── Iowa – Story county ──
+    ia_bboxes = [
+        (41.85, -93.70, 42.05, -93.40),
+        (41.95, -93.50, 42.15, -93.25),
+        (41.80, -93.55, 42.00, -93.30),
+        (42.00, -93.45, 42.20, -93.20),
+        (41.90, -93.65, 42.10, -93.40),
+    ]
+    print("Fetching Iowa fields (Story county)...")
+    ia_fields = fetch_fields(ia_bboxes, "19", "IA")
+    print(f"  Iowa: {len(ia_fields)} fields selected")
+
     # ── Nebraska – Phelps county ──
     ne_bboxes = [
         (40.40, -99.55, 40.60, -99.30),
@@ -176,6 +190,14 @@ def main():
         print(f"\nWritten: {path}")
     else:
         print("\nWARNING: No Illinois fields fetched — keeping existing file")
+
+    if ia_fields:
+        path = EXAMPLES_DIR / "real_10_fields_iowa.geojson"
+        with open(path, "w") as f:
+            json.dump({"type": "FeatureCollection", "features": ia_fields}, f, indent=2)
+        print(f"Written: {path}")
+    else:
+        print("WARNING: No Iowa fields fetched — keeping existing file")
 
     if ne_fields:
         path = EXAMPLES_DIR / "real_10_fields_nebraska.geojson"
