@@ -1,0 +1,385 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_001",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 194.09
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.792778,
+              41.859064
+            ],
+            [
+              -88.785753,
+              41.856735
+            ],
+            [
+              -88.786718,
+              41.865476
+            ],
+            [
+              -88.793435,
+              41.853811
+            ],
+            [
+              -88.792778,
+              41.859064
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_002",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 218.14
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.795514,
+              41.898391
+            ],
+            [
+              -88.781179,
+              41.89692
+            ],
+            [
+              -88.785936,
+              41.912892
+            ],
+            [
+              -88.793145,
+              41.894314
+            ],
+            [
+              -88.795514,
+              41.898391
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_003",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 321.7
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.776385,
+              41.900696
+            ],
+            [
+              -88.76473,
+              41.903528
+            ],
+            [
+              -88.764482,
+              41.91738
+            ],
+            [
+              -88.778781,
+              41.902627
+            ],
+            [
+              -88.776385,
+              41.900696
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_004",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 219.66
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.82805,
+              41.879652
+            ],
+            [
+              -88.818813,
+              41.876937
+            ],
+            [
+              -88.818609,
+              41.886437
+            ],
+            [
+              -88.824118,
+              41.879254
+            ],
+            [
+              -88.82805,
+              41.879652
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_005",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 209.06
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.82945,
+              41.912584
+            ],
+            [
+              -88.819963,
+              41.915722
+            ],
+            [
+              -88.820511,
+              41.923171
+            ],
+            [
+              -88.832846,
+              41.910617
+            ],
+            [
+              -88.82945,
+              41.912584
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_006",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 442.69
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.830961,
+              41.932218
+            ],
+            [
+              -88.815707,
+              41.929028
+            ],
+            [
+              -88.817559,
+              41.9414
+            ],
+            [
+              -88.831665,
+              41.930203
+            ],
+            [
+              -88.830961,
+              41.932218
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_007",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 436.26
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.819503,
+              41.870519
+            ],
+            [
+              -88.800081,
+              41.872249
+            ],
+            [
+              -88.800361,
+              41.880039
+            ],
+            [
+              -88.81686,
+              41.875552
+            ],
+            [
+              -88.819503,
+              41.870519
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_008",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 225.33
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.765881,
+              41.920462
+            ],
+            [
+              -88.756737,
+              41.920028
+            ],
+            [
+              -88.758825,
+              41.935579
+            ],
+            [
+              -88.763583,
+              41.924247
+            ],
+            [
+              -88.765881,
+              41.920462
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_009",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 447.86
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.806996,
+              41.868026
+            ],
+            [
+              -88.794908,
+              41.868217
+            ],
+            [
+              -88.791701,
+              41.882815
+            ],
+            [
+              -88.807867,
+              41.864422
+            ],
+            [
+              -88.806996,
+              41.868026
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "field_id": "IL_FIELD_010",
+        "state_fips": "17",
+        "region": "corn_belt",
+        "crop_name": "farmland",
+        "source": "synthetic",
+        "area_acres": 375.06
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -88.848725,
+              41.929988
+            ],
+            [
+              -88.828972,
+              41.924084
+            ],
+            [
+              -88.830909,
+              41.938509
+            ],
+            [
+              -88.844555,
+              41.929073
+            ],
+            [
+              -88.848725,
+              41.929988
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
