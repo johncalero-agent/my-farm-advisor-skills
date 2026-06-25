@@ -129,7 +129,7 @@ elif [[ ${NE_NEED} -gt 0 ]]; then
   DATA_PIPELINE_DATA_ROOT="${RESOLVED_ROOT}" \
     "${PYTHON}" "${BOOTSTRAP}" \
     --state-fips 31 \
-    --county-name Lancaster \
+    --county-name Phelps \
     --count "${NE_NEED}" \
     --seed 44 \
     --grower-slug "${NE_SLUG}" \
