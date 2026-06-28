@@ -76,7 +76,7 @@ def osm_element_to_feature(element: dict, state_fips: str) -> dict | None:
 
     field_id = f"osm-{element['id']}"
     area_acres = polygon.area * (111320 ** 2) * abs(math.cos(math.radians(polygon.centroid.y))) / 4046.86
-    if area_acres < 25:
+    if area_acres < 200:
         return None
     tags = element.get("tags", {})
 
