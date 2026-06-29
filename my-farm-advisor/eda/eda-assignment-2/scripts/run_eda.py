@@ -312,7 +312,8 @@ def plot_crop_composition(cdl: dict[str, pd.DataFrame]) -> str:
 def plot_corn_years_histogram(cdl: dict[str, pd.DataFrame]) -> str:
     fig, ax = plt.subplots(figsize=(10, 6))
     for abbr, c in GROWER_COLORS.items():
-        by_field = cdl[abbr][cdl[abbr]["crop_name"] == "Corn"].groupby("field_id").size()
+        dominant = cdl[abbr].loc[cdl[abbr].groupby(["field_id", "year"])["pct"].idxmax()]
+        by_field = dominant[dominant["crop_name"] == "Corn"].groupby("field_id").size()
         ax.hist(by_field, bins=range(1, 7), alpha=0.6, color=c,
                 label=GROWER_LABELS[abbr], edgecolor="white", align="left")
     ax.set_xlabel("Number of years in corn (out of 5)")
