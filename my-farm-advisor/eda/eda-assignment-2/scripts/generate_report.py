@@ -47,7 +47,7 @@ def main():
             ("Area Histogram", "area_histogram.png",
              "Distribution of field areas across all three growers. IL and NE have larger, more variable fields; IA is more uniform."),
             ("Area Boxplot", "area_boxplot.png",
-             "Boxplot comparing field area distributions. IL median ~800ac, IA median ~690ac, NE median ~770ac."),
+             "Boxplot comparing field area distributions. All fields >200ac, CV 25-35%, structurally comparable."),
             ("Boundary Map", "boundary_map.png",
              "All 30 field boundaries in Albers projection, colored by grower. Three distinct counties: DeKalb IL, Story IA, Phelps NE."),
         ],
@@ -55,17 +55,17 @@ def main():
             ("Annual Precipitation", "annual_precip.png",
              "Annual precipitation by grower and year. NE receives ~300mm less rain than IL. 2022 drought visible in NE (392mm)."),
             ("Annual Growing Degree Days", "annual_gdd.png",
-             "Annual GDD (base 10°C). NE has ~24% more heat than IL — the inverse of the precipitation gradient."),
+             "Annual GDD (base 10°C). NE has ~400 more GDD than IL — the inverse of the precipitation gradient."),
             ("Precipitation vs GDD", "precip_gdd_correlation.png",
              "Scatter plot of precip vs GDD by grower-year. IL clusters wet/cool, NE clusters dry/hot. The fundamental climate tradeoff."),
             ("Weather Centroid Map", "weather_centroid_map.png",
-             "Field centroids colored by grower. The spatial separation of the three counties matches their climate differences."),
+             "Field centroids colored by grower. The spatial separation confirms genuinely different climate zones."),
         ],
         "cdl": [
             ("Crop Composition", "crop_composition_stacked.png",
-             "Crop composition by grower (mean across 5 years). NE is corn-dominant, IA leans soy, IL is balanced."),
+             "Crop composition by grower (mean across 5 years). NE is corn-dominant, IA leans soy, IL is balanced with more alfalfa/wheat."),
             ("Corn Years Histogram", "corn_years_histogram.png",
-             "Number of years each field was in corn (out of 5). NE has more fields with 3-5 corn years (irrigation)."),
+             "Number of years each field was in corn (out of 5). NE has more fields with 3-5 corn years (irrigation enables continuous corn)."),
             ("Corn/Soy Ratio Trend", "corn_soy_ratio.png",
              "Combined corn+soy percentage of total CDL area over time. All three growers consistently >75% corn+soy."),
             ("Dominant Crop Map", "dominant_crop_map.png",
@@ -107,47 +107,39 @@ tr:nth-child(even) { background: #f2f2f2; }
 <h1>Assignment 2 — Field-Level Exploratory Data Analysis</h1>
 <div class="meta">
 <p><strong>Growers:</strong> IL: il-dekalb-grower (DeKalb) | IA: iowa-grower (Story) | NE: nebraska-grower (Phelps)</p>
-<p><strong>Data:</strong> Real OSM field boundaries, NASA POWER weather (2021-2025), USDA CDL cropland (2021-2025)</p>
-<p><strong>Generated:</strong> Static Python outputs from eda-assignment-2 subskill</p>
+<p><strong>Data:</strong> Real OSM field boundaries (>200ac min), NASA POWER weather (2021-2025), USDA CDL cropland (2021-2025)</p>
+<p><strong>Generated:</strong> Static Python outputs from eda-assignment-2 subskill. Soil analysis excluded.</p>
 </div>
-""")
 
-    # Summary table
-    html_parts.append("<h2>Summary</h2><div class='section'>")
-    html_parts.append("<p>Three Corn Belt growers with 10 fields each. Field boundaries sourced from OpenStreetMap/Overpass. "
-                      "Weather data from NASA POWER via Zarr grid. CDL crop type data from USDA NASS. "
-                      "The east-west climate gradient (IL → IA → NE) drives differences in field scale, crop choice, and irrigation adoption.</p>")
-    html_parts.append('<table><thead><tr><th>Grower</th><th>County</th><th>Fields</th><th>State FIPS</th><th>Avg Field (ac)</th><th>Total (ac)</th><th>Avg Precip (mm)</th><th>Avg GDD</th><th>Dominant 2025 Crop</th></tr></thead><tbody>')
-    html_parts.append('<tr><td>IL</td><td>DeKalb</td><td>10</td><td>17</td><td>836</td><td>8,356</td><td>846</td><td>1,800</td><td>Corn</td></tr>')
-    html_parts.append('<tr><td>IA</td><td>Story</td><td>10</td><td>19</td><td>693</td><td>6,934</td><td>813</td><td>2,139</td><td>Corn</td></tr>')
-    html_parts.append('<tr><td>NE</td><td>Phelps</td><td>10</td><td>31</td><td>774</td><td>7,742</td><td>565</td><td>2,241</td><td>Corn</td></tr>')
-    html_parts.append('</tbody></table></div>')
-
-    # Data Sources
-    html_parts.append("""
-<h2>Data Sources</h2>
-<div class='section'>
-<table>
-  <tr><th>Dataset</th><th>Source</th><th>Spatial Resolution</th><th>Temporal Coverage</th></tr>
-  <tr><td>Field boundaries</td><td>OpenStreetMap / Overpass API</td><td>Individual field polygons</td><td>Static (current OSM snapshot)</td></tr>
-  <tr><td>Weather</td><td>NASA POWER (Zarr grid)</td><td>~0.5&deg; (~50 km)</td><td>Daily, 2021–2025</td></tr>
-  <tr><td>CDL cropland</td><td>USDA NASS Cropland Data Layer</td><td>30 m</td><td>Annual, 2021–2025</td></tr>
-</table>
+<h2>Summary</h2><div class='section'>
+<p>Three Corn Belt growers with 10 fields each. Field boundaries from OpenStreetMap/Overpass (200ac minimum filter for structural comparability). Weather from NASA POWER Zarr. CDL from USDA NASS. The east-west climate gradient drives differences in crop choice — but without yield data, this analysis describes strategy, not productivity.</p>
+<table><thead><tr><th>Grower</th><th>County</th><th>Fields</th><th>Range (ac)</th><th>Mean (ac)</th><th>CV</th><th>Avg Precip</th><th>Avg GDD</th></tr></thead><tbody>
+<tr><td>IL</td><td>DeKalb</td><td>10</td><td>226-1,385</td><td>962</td><td>35%</td><td>846 mm</td><td>1,800</td></tr>
+<tr><td>IA</td><td>Story</td><td>10</td><td>299-1,152</td><td>735</td><td>31%</td><td>813 mm</td><td>2,139</td></tr>
+<tr><td>NE</td><td>Phelps</td><td>10</td><td>587-1,182</td><td>787</td><td>25%</td><td>565 mm</td><td>2,241</td></tr>
+</tbody></table>
 </div>
 
 <h2>Analysis Levels</h2>
 <div class='section'>
-<p>This EDA compares data at three levels:</p>
 <ul>
-  <li><strong>Within a field:</strong> Weather variables (precipitation, GDD) across 5 years for individual fields. Visible in the annual bar charts and precip/GDD scatter.</li>
-  <li><strong>Across fields within a grower:</strong> Field size distributions, corn year frequency, and crop diversity within each grower's 10 fields. Visible in the histogram, boxplot, and corn years chart.</li>
-  <li><strong>Across growers:</strong> IL vs IA vs NE comparisons of climate, field scale, and crop composition. All grouped charts and the geospatial maps address this level.</li>
+  <li><strong>Within a field:</strong> Weather variables across 5 years for individual fields (annual bars, scatter labels).</li>
+  <li><strong>Across fields within a grower:</strong> Field size distributions and corn year frequency within each farm.</li>
+  <li><strong>Across growers:</strong> IL vs IA vs NE climate, scale, and crop composition comparisons.</li>
 </ul>
-<p><strong>Note:</strong> Soil analysis was not required for this assignment and was not included. The EDA focuses exclusively on field boundaries, weather, and CDL/cropland data layers.</p>
+</div>
+
+<h2>Data Sources</h2>
+<div class='section'>
+<table>
+  <tr><th>Dataset</th><th>Source</th><th>Resolution</th><th>Coverage</th></tr>
+  <tr><td>Field boundaries</td><td>OpenStreetMap / Overpass API</td><td>Individual fields</td><td>Static (current OSM)</td></tr>
+  <tr><td>Weather</td><td>NASA POWER (Zarr grid)</td><td>~0.5&deg;</td><td>Daily, 2021-2025</td></tr>
+  <tr><td>CDL cropland</td><td>USDA NASS Cropland Data Layer</td><td>30 m</td><td>Annual, 2021-2025</td></tr>
+</table>
 </div>
 """)
 
-    # Categories
     for section_id, section_title in [
         ("field_boundaries", "Field Boundaries"),
         ("weather", "Weather"),
@@ -168,7 +160,6 @@ tr:nth-child(even) { background: #f2f2f2; }
             html_parts.append("</div>")
         html_parts.append("</div>")
 
-    # Tables
     html_parts.append("<h2>Comparison Tables</h2><div class='section'>")
     for title, filename in tables.items():
         path = OUTPUT_DIR / filename
@@ -181,25 +172,25 @@ tr:nth-child(even) { background: #f2f2f2; }
 <h2>Key Findings</h2>
 <div class='section'>
 <ol>
-  <li><strong>Scale varies by state:</strong> IL and NE fields average 770-840 ac; IA fields average 690 ac. The difference reflects farm structure and land ownership patterns.</li>
-  <li><strong>Climate gradient drives strategy:</strong> NE receives 33% less rain than IL but has 24% more GDD. This inverse relationship creates the conditions that make irrigation profitable.</li>
-  <li><strong>Irrigation enables continuous corn:</strong> NE has more fields with 3-5 years of corn (out of 5) because irrigation buffers drought risk. IA and IL rotate corn-soy more frequently.</li>
-  <li><strong>2022 drought signal:</strong> Nebraska's 2022 precipitation (392mm) was 31% below its 5-year mean. No corresponding yield penalty appears in CDL — consistent with irrigation adoption.</li>
-  <li><strong>Corn+soy dominance:</strong> All three growers devote 75-99% of CDL-classified area to corn and soybeans. The Corn Belt label is well-earned.</li>
+  <li><strong>Fields are structurally comparable.</strong> All >200ac, CV 25-35% across states. The comparison is fair.</li>
+  <li><strong>Climate gradient drives strategy.</strong> NE receives ~300mm less rain than IL but has ~400 more GDD. Wet=cool, dry=hot.</li>
+  <li><strong>Irrigation enables continuous corn.</strong> NE has more fields with 3-5 years of corn because irrigation buffers drought risk. IA and IL rotate more.</li>
+  <li><strong>2022 drought signal.</strong> Nebraska's 2022 precipitation (392mm) was ~31% below its 5-year mean. No CDL penalty — consistent with irrigation.</li>
+  <li><strong>Without yield data, this describes strategy, not productivity.</strong> We can show what farmers plant, not how well it performs.</li>
 </ol>
 </div>
 
 <h2>Limitations</h2>
 <div class='section'>
 <ol>
-  <li><strong>Small sample:</strong> 10 fields per state from one county each. Results may not generalize to entire states or other counties within the same state.</li>
-  <li><strong>Short time window:</strong> 5 years of weather and CDL data is insufficient for firm climate trend conclusions. Apparent patterns (e.g., NE drought year) should be interpreted as observations, not long-term shifts.</li>
-  <li><strong>Modeled weather:</strong> NASA POWER is a global reanalysis grid (~0.5&deg; resolution). Local precipitation and temperature extremes may be smoothed compared to on-site station data.</li>
-  <li><strong>Provisional 2025 CDL:</strong> The current-year Cropland Data Layer is preliminary and may be revised by USDA in subsequent releases.</li>
-  <li><strong>OSM boundary quality:</strong> OpenStreetMap farmland polygons are crowd-sourced and may contain omissions, misclassifications, or aggregated field groupings.</li>
-  <li><strong>Single county per state:</strong> One county cannot capture within-state diversity, such as northern versus southern Illinois climate or eastern versus western Nebraska rainfall gradients.</li>
-  <li><strong>Soil excluded:</strong> Soil properties influence both crop choice and drought response but were excluded per the assignment scope.</li>
-  <li><strong>Satellite imagery not included:</strong> Raw Sentinel-2 and Landsat scenes were not downloaded due to credential requirements, so NDVI-based vegetation health analysis was not possible.</li>
+  <li><strong>Small sample:</strong> 10 fields per state from one county each.</li>
+  <li><strong>Short time window:</strong> 5 years insufficient for climate trend conclusions.</li>
+  <li><strong>Modeled weather:</strong> NASA POWER reanalysis, not on-site stations.</li>
+  <li><strong>Provisional 2025 CDL:</strong> Preliminary, may be revised.</li>
+  <li><strong>OSM boundary quality:</strong> Crowd-sourced, may have omissions.</li>
+  <li><strong>Single county per state:</strong> Cannot capture within-state diversity.</li>
+  <li><strong>Soil excluded per assignment scope.</strong></li>
+  <li><strong>No yield data.</strong> EDA describes planting strategy, not productivity outcomes.</li>
 </ol>
 </div>
 

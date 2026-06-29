@@ -39,7 +39,7 @@ Output directory: `${DATA_PIPELINE_DATA_ROOT}/data-pipeline/eda/eda-assignment-2
 
 **What:** Histogram and boxplot of field areas by grower.
 
-**When to use:** First step — understand scale differences before interpreting weather or CDL.
+**When to use:** First step — confirm farm scale is comparable before interpreting weather or CDL.
 
 ### Task 2: Climate gradient comparison
 

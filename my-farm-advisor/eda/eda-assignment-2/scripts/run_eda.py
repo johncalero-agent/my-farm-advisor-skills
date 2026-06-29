@@ -41,7 +41,6 @@ GROWER_CONFIG = [
     ("iowa-grower", "iowa-grower-iowa", "IA", "Story, IA"),
     ("nebraska-grower", "nebraska-farm", "NE", "Phelps, NE"),
 ]
-
 GROWER_COLORS = {"IL": "#4e79a7", "IA": "#f28e2b", "NE": "#e15759"}
 GROWER_LABELS = {abbr: label for _, _, abbr, label in GROWER_CONFIG}
 
@@ -97,7 +96,6 @@ def load_rotation() -> dict[str, pd.DataFrame]:
 # ── Field Boundary Outputs ──
 
 def plot_area_histogram(boundaries: dict[str, gpd.GeoDataFrame]) -> str:
-    combined = pd.concat(boundaries.values(), ignore_index=True)
     fig, ax = plt.subplots(figsize=(10, 6))
     for abbr, c in GROWER_COLORS.items():
         data = boundaries[abbr]["area_acres"]
@@ -157,7 +155,7 @@ def save_area_comparison(boundaries: dict[str, gpd.GeoDataFrame]) -> str:
 
 def plot_boundary_map(boundaries: dict[str, gpd.GeoDataFrame]) -> str:
     combined = pd.concat(boundaries.values(), ignore_index=True)
-    combined = combined.to_crs("EPSG:5070")  # Albers for CONUS
+    combined = combined.to_crs("EPSG:5070")
     fig, ax = plt.subplots(figsize=(12, 6))
     for abbr, c in GROWER_COLORS.items():
         subset = combined[combined["grower"] == abbr]
@@ -229,7 +227,7 @@ def save_precip_gdd_correlation(weather: dict[str, pd.DataFrame]) -> str:
             gdd=("gdd", lambda x: x.sum() / weather[abbr]["field_id"].nunique()),
         )
         for year, row in grouped.iterrows():
-            rows.append({"grower": abbr, "year": year,
+            rows.append({"grower": abbr, "year": int(year),
                          "precip_mm": round(row["precip"], 1),
                          "gdd": round(row["gdd"], 1)})
     df = pd.DataFrame(rows)
@@ -258,26 +256,14 @@ def save_precip_gdd_correlation(weather: dict[str, pd.DataFrame]) -> str:
 
 def plot_weather_centroid_map(boundaries: dict[str, gpd.GeoDataFrame],
                                weather: dict[str, pd.DataFrame]) -> str:
-    combined = pd.concat(boundaries.values(), ignore_index=True)
-    combined = combined.to_crs("EPSG:5070")
-    combined["centroid"] = combined.geometry.centroid
-    combined["centroid_lon"] = combined.centroid.x
-    combined["centroid_lat"] = combined.centroid.y
-
-    precip = pd.concat(weather.values(), ignore_index=True)
-    total_precip = precip.groupby(["grower", "field_id"])["PRECTOTCORR"].sum().reset_index()
-
-    # Merge centroids with precip
     points = []
     for abbr, gdf in boundaries.items():
         gdf_proj = gdf.to_crs("EPSG:5070")
+        total_precip = weather[abbr].groupby("field_id")["PRECTOTCORR"].sum()
         for _, row in gdf_proj.iterrows():
             cent = row.geometry.centroid
-            fid = row["field_id"]
-            match = total_precip[(total_precip["grower"] == abbr) &
-                                 (total_precip["field_id"] == fid)]
-            precip_val = match["PRECTOTCORR"].values[0] if len(match) > 0 else 0
-            points.append({"grower": abbr, "field_id": fid,
+            precip_val = total_precip.get(row["field_id"], 0)
+            points.append({"grower": abbr, "field_id": row["field_id"],
                            "geometry": cent, "total_precip_mm": precip_val})
     gdf_pts = gpd.GeoDataFrame(points, crs="EPSG:5070")
 
@@ -286,7 +272,7 @@ def plot_weather_centroid_map(boundaries: dict[str, gpd.GeoDataFrame],
         subset = gdf_pts[gdf_pts["grower"] == abbr]
         subset.plot(ax=ax, color=GROWER_COLORS[abbr], markersize=40,
                      alpha=0.7, label=GROWER_LABELS[abbr], edgecolors="black", linewidth=0.5)
-    ax.set_title("Field Centroids Colored by Grower (Total Precip 2021-2025)")
+    ax.set_title("Field Centroids by Grower (Total Precip 2021-2025)")
     ax.set_xlabel("Easting (m, EPSG:5070)")
     ax.set_ylabel("Northing (m, EPSG:5070)")
     ax.legend()
@@ -303,23 +289,14 @@ def plot_crop_composition(cdl: dict[str, pd.DataFrame]) -> str:
     fig, ax = plt.subplots(figsize=(10, 6))
     x = np.arange(3)
     width = 0.6
-    all_crops = set()
-    for abbr in ["IL", "IA", "NE"]:
-        all_crops.update(cdl[abbr]["crop_name"].unique())
-    all_crops = sorted(all_crops)
+    all_crops = sorted({c for abbr in ["IL", "IA", "NE"] for c in cdl[abbr]["crop_name"].unique()})
     bottom = np.zeros(3)
     colors = plt.cm.Set2(np.linspace(0, 1, len(all_crops)))
-
-    crop_data = {}
-    for abbr in ["IL", "IA", "NE"]:
-        crop_data[abbr] = cdl[abbr].groupby("crop_name")["pct"].mean()
-
+    crop_data = {abbr: cdl[abbr].groupby("crop_name")["pct"].mean() for abbr in ["IL", "IA", "NE"]}
     for idx, crop in enumerate(all_crops):
         vals = [crop_data[abbr].get(crop, 0) for abbr in ["IL", "IA", "NE"]]
-        ax.bar(x, vals, width, bottom=bottom, color=colors[idx], edgecolor="white",
-               label=crop)
+        ax.bar(x, vals, width, bottom=bottom, color=colors[idx], edgecolor="white", label=crop)
         bottom += vals
-
     ax.set_xticks(x)
     ax.set_xticklabels([GROWER_LABELS[abbr] for abbr in ["IL", "IA", "NE"]])
     ax.set_ylabel("Mean crop percentage")
@@ -357,14 +334,12 @@ def save_corn_soy_ratio(cdl: dict[str, pd.DataFrame]) -> str:
             subset = cdl[abbr][cdl[abbr]["year"] == year]
             corn = subset[subset["crop_name"] == "Corn"]["pct"].sum()
             soy = subset[subset["crop_name"] == "Soybeans"]["pct"].sum()
-            total = corn + soy
             rows.append({
-                "grower": abbr, "year": year,
+                "grower": abbr, "year": int(year),
                 "corn_pct": round(corn, 1), "soy_pct": round(soy, 1),
-                "corn_soy_total_pct": round(total, 1),
+                "corn_soy_total_pct": round(corn + soy, 1),
             })
     df = pd.DataFrame(rows)
-
     fig, ax = plt.subplots(figsize=(10, 6))
     for abbr, c in GROWER_COLORS.items():
         subset = df[df["grower"] == abbr]
@@ -379,7 +354,6 @@ def save_corn_soy_ratio(cdl: dict[str, pd.DataFrame]) -> str:
     fig.savefig(path_png, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {path_png}")
-
     path_csv = str(OUTPUT_DIR / "corn_soy_ratio.csv")
     df.to_csv(path_csv, index=False)
     print(f"  Saved: {path_csv}")
@@ -390,23 +364,18 @@ def plot_dominant_crop_map(boundaries: dict[str, gpd.GeoDataFrame],
                             cdl: dict[str, pd.DataFrame]) -> str:
     combined = pd.concat(boundaries.values(), ignore_index=True)
     combined = combined.to_crs("EPSG:5070")
-
-    # Get dominant 2025 crop per field
     dominant = []
     for abbr in ["IL", "IA", "NE"]:
         cdl_2025 = cdl[abbr][cdl[abbr]["year"] == 2025]
         top = cdl_2025.loc[cdl_2025.groupby("field_id")["pct"].idxmax()]
         dominant.append(top)
     dominant_all = pd.concat(dominant, ignore_index=True)
-
     merged = combined.merge(dominant_all[["field_id", "crop_name"]].rename(
         columns={"crop_name": "dominant_crop"}), on="field_id", how="left")
     merged["dominant_crop"] = merged["dominant_crop"].fillna("Unknown")
-
     crop_colors = {"Corn": "#f4c542", "Soybeans": "#6db33f", "Alfalfa": "#9acd32",
                    "Winter Wheat": "#d4a76a", "Grass/Pasture": "#90ee90",
                    "Forest": "#2d5a27", "Fallow/Idle": "#cd853f", "Unknown": "#cccccc"}
-
     fig, ax = plt.subplots(figsize=(12, 6))
     for crop, color in crop_colors.items():
         subset = merged[merged["dominant_crop"] == crop]
