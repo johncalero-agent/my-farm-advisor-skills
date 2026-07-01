@@ -50,6 +50,12 @@ def main():
              "Boxplot comparing field area distributions. All fields >200ac, CV 25-35%, structurally comparable."),
             ("Boundary Map", "boundary_map.png",
              "All 30 field boundaries in Albers projection, colored by grower. Three distinct counties: DeKalb IL, Story IA, Phelps NE."),
+            ("IL Field Details", "boundary_map_il.png",
+             "Illinois: 10 fields in DeKalb county. Labels show abbreviated OSM field IDs."),
+            ("IA Field Details", "boundary_map_ia.png",
+             "Iowa: 10 fields in Story county. Labels show abbreviated OSM field IDs."),
+            ("NE Field Details", "boundary_map_ne.png",
+             "Nebraska: 10 fields in Phelps county. Labels show abbreviated OSM field IDs."),
         ],
         "weather": [
             ("Annual Precipitation", "annual_precip.png",
@@ -143,6 +149,7 @@ tr:nth-child(even) { background: #f2f2f2; }
     for section_id, section_title in [
         ("field_boundaries", "Field Boundaries"),
         ("weather", "Weather"),
+        ("cdl", "CDL / Cropland Data"),
         ("cdl", "CDL / Cropland Data"),
     ]:
         html_parts.append(f"<h2>{section_title}</h2><div class='section'>")

@@ -98,7 +98,10 @@ def main():
     add_image_section(doc, "area_boxplot.png", "Fig 2: Area boxplot by grower")
     add_para(doc, "Comparison — Area comparison table (CSV): n, min, max, mean, CV, total per grower.", bold=False)
     add_para(doc, "Map — Field boundaries colored by grower: Three counties in three states. Spatial context.", bold=False)
-    add_image_section(doc, "boundary_map.png", "Fig 3: Field boundaries by grower")
+    add_image_section(doc, "boundary_map.png", "Fig 3: Field boundaries by grower (combined)")
+    add_image_section(doc, "boundary_map_il.png", "Fig 3a: Illinois field boundaries (DeKalb)")
+    add_image_section(doc, "boundary_map_ia.png", "Fig 3b: Iowa field boundaries (Story)")
+    add_image_section(doc, "boundary_map_ne.png", "Fig 3c: Nebraska field boundaries (Phelps)")
 
     # Weather
     add_heading(doc, "5. Weather")

@@ -173,6 +173,30 @@ def plot_boundary_map(boundaries: dict[str, gpd.GeoDataFrame]) -> str:
     return path
 
 
+def plot_individual_boundary_maps(boundaries: dict[str, gpd.GeoDataFrame]) -> list[str]:
+    paths = []
+    for abbr in ["IL", "IA", "NE"]:
+        gdf = boundaries[abbr].to_crs("EPSG:5070")
+        fig, ax = plt.subplots(figsize=(8, 6))
+        gdf.plot(ax=ax, color=GROWER_COLORS[abbr], edgecolor="black",
+                  linewidth=0.5, alpha=0.8)
+        # Add field labels
+        for _, row in gdf.iterrows():
+            cent = row.geometry.centroid
+            label = row["field_id"].replace("osm-", "").replace("IL_FIELD_", "F")
+            ax.annotate(label, (cent.x, cent.y), fontsize=5, ha="center", va="center")
+        ax.set_title(f"Field Boundaries — {GROWER_LABELS[abbr]}")
+        ax.set_xlabel("Easting (m, EPSG:5070)")
+        ax.set_ylabel("Northing (m, EPSG:5070)")
+        ax.axis("equal")
+        path = str(OUTPUT_DIR / f"boundary_map_{abbr.lower()}.png")
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        print(f"  Saved: {path}")
+        paths.append(path)
+    return paths
+
+
 # ── Weather Outputs ──
 
 def plot_annual_precip(weather: dict[str, pd.DataFrame]) -> str:
@@ -415,6 +439,7 @@ def main():
     plot_area_boxplot(boundaries)
     save_area_comparison(boundaries)
     plot_boundary_map(boundaries)
+    plot_individual_boundary_maps(boundaries)
     print()
 
     print("Weather outputs:")
