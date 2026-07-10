@@ -123,6 +123,23 @@ The dashboard includes a title block with:
 - Heat-stress day count (days > 95°F)
 - Final cumulative GDD
 
+### Data quality validation
+
+Before generating the dashboard, the script validates all three input sources:
+
+| Check | Rule | Status Thresholds |
+|-------|------|-------------------|
+| **Weather completeness** | Days present vs. expected (365/366) | [OK] ≥90% / [WARN] 80–90% / [FAIL] <80% |
+| **NDVI coverage** | Scenes across growing season phases | [OK] ≥5 scenes, ≥67% phase coverage / [WARN] 3–4 scenes / [FAIL] <3 scenes |
+| **CDL dominance** | Dominant crop percentage | [OK] ≥70% / [WARN] 50–70% / [FAIL] <50% |
+
+Quality badges appear in the dashboard title:
+```
+[OK] Weather: 365/365 days (100%)  |  [OK] NDVI: 9 scenes  |  [OK] CDL: Soybeans 72.4%
+```
+
+Gaps >3 days in weather data are reported in the console output.
+
 ### Event detection
 
 The script automatically detects and highlights:

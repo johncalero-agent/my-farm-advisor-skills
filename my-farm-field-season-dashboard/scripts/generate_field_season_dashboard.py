@@ -486,6 +486,113 @@ def _build_crop_specific_captions(crop_name: str, events: list[dict[str, Any]], 
 
 
 # ---------------------------------------------------------------------------
+# Data quality validation
+# ---------------------------------------------------------------------------
+import calendar
+
+
+def _validate_weather_completeness(weather_df: pd.DataFrame, year: int) -> dict[str, Any]:
+    """Check for missing or sparse weather dates."""
+    expected_days = 366 if calendar.isleap(year) else 365
+    actual_days = len(weather_df)
+    completeness = actual_days / expected_days if expected_days > 0 else 0.0
+    
+    gaps: list[dict[str, Any]] = []
+    if actual_days >= 2:
+        df_sorted = weather_df.sort_values("date").reset_index(drop=True)
+        for i in range(1, len(df_sorted)):
+            prev_date = df_sorted.loc[i - 1, "date"]
+            curr_date = df_sorted.loc[i, "date"]
+            gap_days = (curr_date - prev_date).days
+            if gap_days > 3:
+                gaps.append({
+                    "start_doy": int(prev_date.dayofyear),
+                    "end_doy": int(curr_date.dayofyear),
+                    "length": gap_days,
+                })
+    
+    status = "valid" if completeness >= 0.90 else "warning" if completeness >= 0.80 else "invalid"
+    
+    return {
+        "status": status,
+        "completeness_pct": completeness * 100,
+        "expected_days": expected_days,
+        "actual_days": actual_days,
+        "gaps": gaps,
+        "is_valid": completeness >= 0.90,
+    }
+
+
+def _validate_ndvi_coverage(scenes_df: pd.DataFrame) -> dict[str, Any]:
+    """Check for adequate NDVI scene coverage across growing season."""
+    n_scenes = len(scenes_df)
+    
+    if n_scenes > 0:
+        doys = sorted(scenes_df["doy"].values)
+        early = any(90 <= d <= 150 for d in doys)
+        mid = any(150 <= d <= 210 for d in doys)
+        late = any(210 <= d <= 270 for d in doys)
+        coverage_score = sum([early, mid, late]) / 3.0
+    else:
+        early = mid = late = False
+        coverage_score = 0.0
+    
+    warnings: list[str] = []
+    if n_scenes < 3:
+        warnings.append("Critical: <3 scenes (insufficient for trend)")
+    elif n_scenes < 5:
+        warnings.append("Sparse: <5 scenes (trend may be noisy)")
+    if coverage_score < 0.5:
+        warnings.append("Poor coverage: Missing key growth phases")
+    
+    status = "valid" if n_scenes >= 5 and coverage_score >= 0.67 else "warning" if n_scenes >= 3 and coverage_score >= 0.5 else "invalid"
+    
+    return {
+        "status": status,
+        "n_scenes": n_scenes,
+        "coverage_score": coverage_score,
+        "phases_covered": {"early": early, "mid": mid, "late": late},
+        "is_valid": n_scenes >= 3 and coverage_score >= 0.5,
+        "warnings": warnings,
+    }
+
+
+def _validate_cdl_dominance(cdl_path: Path, field_id: str, year: int) -> dict[str, Any]:
+    """Validate CDL crop classification quality."""
+    df = pd.read_csv(cdl_path)
+    subset = df[(df["field_id"].astype(str) == str(field_id)) & (df["year"].astype(int) == int(year))]
+    
+    if subset.empty:
+        return {"status": "invalid", "is_valid": False, "error": "No CDL data for field-year"}
+    
+    dominant = subset.sort_values("pct", ascending=False).iloc[0]
+    dominance = float(dominant["pct"])
+    crop_name = str(dominant["crop_name"])
+    
+    warnings: list[str] = []
+    if dominance < 50:
+        warnings.append(f"Low dominance: {crop_name} only {dominance:.1f}%")
+    elif dominance < 70:
+        warnings.append(f"Moderate dominance: {crop_name} at {dominance:.1f}%")
+    
+    status = "valid" if dominance >= 70 else "warning" if dominance >= 50 else "invalid"
+    
+    return {
+        "status": status,
+        "crop_name": crop_name,
+        "crop_code": int(dominant["crop_code"]),
+        "dominance_pct": dominance,
+        "is_valid": dominance >= 50,
+        "warnings": warnings,
+    }
+
+
+def _format_quality_badge(status: str) -> str:
+    """Return text badge for quality status."""
+    return {"valid": "[OK]", "warning": "[WARN]", "invalid": "[FAIL]"}.get(status, "[?]")
+
+
+# ---------------------------------------------------------------------------
 # Dashboard rendering
 # ---------------------------------------------------------------------------
 def _smooth_loess(x: np.ndarray, y: np.ndarray, frac: float = 0.3) -> np.ndarray:
@@ -507,6 +614,7 @@ def _render_dashboard(
     field_slug: str,
     year: int,
     args: argparse.Namespace,
+    quality: dict[str, Any] | None = None,
 ) -> plt.Figure:
     fig = plt.figure(figsize=(14, 16))
     fig.patch.set_facecolor("#fafaf9")
@@ -532,6 +640,22 @@ def _render_dashboard(
 
     # Build caption lines
     lines = [f"{year} Season — {crop_name}  |  Field: {field_slug}"]
+    
+    # Quality indicators
+    if quality:
+        qw = quality.get("weather", {})
+        qn = quality.get("ndvi", {})
+        qc = quality.get("cdl", {})
+        
+        qw_badge = _format_quality_badge(qw.get("status", "unknown"))
+        qn_badge = _format_quality_badge(qn.get("status", "unknown"))
+        qc_badge = _format_quality_badge(qc.get("status", "unknown"))
+        
+        quality_line = f"{qw_badge} Weather: {qw.get('actual_days', '?')}/{qw.get('expected_days', '?')} days ({qw.get('completeness_pct', 0):.0f}%)"
+        quality_line += f"  |  {qn_badge} NDVI: {qn.get('n_scenes', '?')} scenes"
+        quality_line += f"  |  {qc_badge} CDL: {qc.get('crop_name', '?')} {qc.get('dominance_pct', 0):.1f}%"
+        lines.append(quality_line)
+    
     stats_line = f"Peak NDVI: {peak_ndvi:.3f} on DOY {peak_doy}" if peak_ndvi else "Peak NDVI: N/A"
     stats_line += f"  |  Precip: {season_precip:.1f} in"
     stats_line += f"  |  Heat stress days (>{args.heat_stress_threshold}°F): {heat_days}"
@@ -844,6 +968,26 @@ def main() -> None:
 
     scenes_df = pd.DataFrame(scene_rows)
 
+    # Validate data quality
+    print("Validating data quality...")
+    qw = _validate_weather_completeness(weather_df, year)
+    qn = _validate_ndvi_coverage(scenes_df)
+    qc = _validate_cdl_dominance(cdl_comp_path, field_id, year)
+    quality = {"weather": qw, "ndvi": qn, "cdl": qc}
+    
+    print(f"  Weather: {qw['actual_days']}/{qw['expected_days']} days ({qw['completeness_pct']:.0f}%) [{qw['status']}]")
+    if qw["gaps"]:
+        for gap in qw["gaps"]:
+            print(f"    Gap: DOY {gap['start_doy']}-{gap['end_doy']} ({gap['length']} days)")
+    
+    print(f"  NDVI: {qn['n_scenes']} scenes, coverage {qn['coverage_score']:.0%} [{qn['status']}]")
+    for warn in qn["warnings"]:
+        print(f"    {warn}")
+    
+    print(f"  CDL: {qc['crop_name']} {qc['dominance_pct']:.1f}% [{qc['status']}]")
+    for warn in qc["warnings"]:
+        print(f"    {warn}")
+    
     # Build 5-year reference
     print("Building 5-year reference stats...")
     ref_stats = _build_reference_stats(grower, farm, field, year, crop_code, args)
@@ -854,7 +998,7 @@ def main() -> None:
         print(f"  Avg final GDD: {ref_stats.get('avg_final_gdd'):.0f}")
 
     # Render
-    fig = _render_dashboard(scenes_df, weather_df, ref_stats, crop_name, field, year, args)
+    fig = _render_dashboard(scenes_df, weather_df, ref_stats, crop_name, field, year, args, quality)
 
     if args.output_path:
         output_path = Path(args.output_path)
