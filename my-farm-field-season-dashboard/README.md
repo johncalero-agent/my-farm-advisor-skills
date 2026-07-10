@@ -121,12 +121,60 @@ The example below was generated for:
 
 > See `examples/osm-1062497612_2022_dashboard.png` for the example output.
 
-## How to rerun
+## Assignment summary
 
-The script is fully parameterized. Change `--field-slug`, `--year`, and
-`--state-fips` to target any field-year in the runtime data tree.
+### Skill or workflow name
 
-Optional overrides:
+**`my-farm-field-season-dashboard`** — Generate aligned field-season mini-dashboards for one field-year.
+
+### Input files used
+
+All inputs come from the approved `data-pipeline` runtime area:
+
+| Input | Runtime path |
+|-------|--------------|
+| Daily weather | `growers/<g>/farms/<f>/fields/<field>/weather/daily_weather.csv` |
+| Sentinel NDVI | `growers/<g>/farms/<f>/fields/<field>/satellite/sentinel/manifest.json` |
+| CDL composition | `growers/<g>/farms/<f>/derived/tables/<farm>_cdl_*_full_composition.csv` |
+| CDL raster | `shared/cdl/rasters/CDL_<year>_<fips>.tif` |
+| Field boundary | `growers/<g>/farms/<f>/fields/<field>/boundary/field_boundary.geojson` |
+
+### Weather metrics calculated
+
+| Metric | Formula | Units |
+|--------|---------|-------|
+| Precipitation | `PRECTOTCORR / 25.4` | inches |
+| Temperature | `T * 9/5 + 32` | °F |
+| GDD (daily) | `max(0, min((Tmax+Tmin)/2, 86) - 50)` | °F·day |
+| Cumulative GDD | Sum from planting window (default DOY 90) | °F·day |
+
+### Dashboard image path
+
+Example output relative to data-pipeline:
+```
+growers/il-dekalb-grower/farms/dekalb-demo-farm/fields/osm-1062497612/derived/reports/osm-1062497612_2022_season_dashboard.png
+```
+
+Also checked into the skill as:
+```
+examples/osm-1062497612_2022_dashboard.png
+```
+
+### How to rerun
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/path/to/my-farm-advisor-runtime
+
+cd my-farm-field-season-dashboard
+python scripts/generate_field_season_dashboard.py \
+  --grower-slug il-dekalb-grower \
+  --farm-slug dekalb-demo-farm \
+  --field-slug osm-1062497612 \
+  --year 2022 \
+  --state-fips 17
+```
+
+Optional overrides for any field-year:
 ```bash
 python scripts/generate_field_season_dashboard.py \
   --grower-slug <grower> \
@@ -136,9 +184,16 @@ python scripts/generate_field_season_dashboard.py \
   --gdd-base 50 \
   --gdd-cap 86 \
   --heat-stress-threshold 95 \
-  --planting-doy 90 \
-  --output-path /custom/path/output.png
+  --planting-doy 90
 ```
+
+### Known data limitations
+
+- **5-year reference stats** require historical weather and NDVI for the same field; if missing, the reference comparison degrades gracefully to a plain data summary
+- **CDL crop masking** accuracy depends on dominant crop percentage; fields with <50% dominant crop may produce unreliable NDVI means
+- **Sentinel scene availability** varies by year and cloud cover; some years may have sparse NDVI coverage
+- **GDD accumulation** uses a fixed planting window (DOY 90) rather than actual planting date, which may misalign with true crop development
+- **Weather data** is from the NASA POWER reanalysis; it may not match on-station observations exactly
 
 ## Annotations and callouts
 
