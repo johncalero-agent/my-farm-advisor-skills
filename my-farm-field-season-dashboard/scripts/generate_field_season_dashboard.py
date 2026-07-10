@@ -322,6 +322,170 @@ def _build_reference_stats(
 
 
 # ---------------------------------------------------------------------------
+# Event detection for captions
+# ---------------------------------------------------------------------------
+def _detect_heavy_rain(weather_df: pd.DataFrame, threshold: float = 1.0) -> list[dict[str, Any]]:
+    """Detect heavy rain days (> threshold inches in 24h)."""
+    heavy = weather_df[weather_df["PRECTOTCORR_in"] > threshold].copy()
+    events = []
+    for _, row in heavy.iterrows():
+        events.append({
+            "doy": int(row["doy"]),
+            "date": str(row["date"].date()),
+            "amount_in": float(row["PRECTOTCORR_in"]),
+            "type": "heavy_rain",
+        })
+    return events
+
+
+def _detect_heat_waves(weather_df: pd.DataFrame, threshold: float = 95.0, min_length: int = 3) -> list[dict[str, Any]]:
+    """Detect heat waves: consecutive days above threshold."""
+    hot = weather_df["T2M_MAX"] > threshold
+    events: list[dict[str, Any]] = []
+    start = None
+    for idx, is_hot in enumerate(hot):
+        if is_hot and start is None:
+            start = idx
+        elif not is_hot and start is not None:
+            length = idx - start
+            if length >= min_length:
+                events.append({
+                    "start_doy": int(weather_df.iloc[start]["doy"]),
+                    "end_doy": int(weather_df.iloc[idx - 1]["doy"]),
+                    "length": length,
+                    "type": "heat_wave",
+                })
+            start = None
+    if start is not None:
+        length = len(hot) - start
+        if length >= min_length:
+            events.append({
+                "start_doy": int(weather_df.iloc[start]["doy"]),
+                "end_doy": int(weather_df.iloc[-1]["doy"]),
+                "length": length,
+                "type": "heat_wave",
+            })
+    return events
+
+
+def _detect_cool_periods(weather_df: pd.DataFrame, gdd_col: str = "gdd", window: int = 7, ratio: float = 0.5) -> list[dict[str, Any]]:
+    """Detect cool periods where 7-day GDD is below ratio of rolling average."""
+    weather_df = weather_df.copy()
+    weather_df["gdd_roll7"] = weather_df[gdd_col].rolling(window=window, min_periods=1).mean()
+    weather_df["gdd_roll30"] = weather_df[gdd_col].rolling(window=30, min_periods=1).mean()
+    cool = weather_df["gdd_roll7"] < (weather_df["gdd_roll30"] * ratio)
+    events: list[dict[str, Any]] = []
+    start = None
+    for idx, is_cool in enumerate(cool):
+        if is_cool and start is None:
+            start = idx
+        elif not is_cool and start is not None:
+            length = idx - start
+            if length >= window:
+                events.append({
+                    "start_doy": int(weather_df.iloc[start]["doy"]),
+                    "end_doy": int(weather_df.iloc[idx - 1]["doy"]),
+                    "length": length,
+                    "type": "cool_period",
+                })
+            start = None
+    return events
+
+
+def _detect_ndvi_dips(scenes_df: pd.DataFrame, dip_threshold: float = 0.1) -> list[dict[str, Any]]:
+    """Detect NDVI dips between consecutive scenes."""
+    if len(scenes_df) < 2:
+        return []
+    events = []
+    sorted_df = scenes_df.sort_values("doy").reset_index(drop=True)
+    for i in range(1, len(sorted_df)):
+        prev = sorted_df.iloc[i - 1]
+        curr = sorted_df.iloc[i]
+        drop = prev["mean_ndvi"] - curr["mean_ndvi"]
+        if drop >= dip_threshold:
+            events.append({
+                "doy": int(curr["doy"]),
+                "drop": float(drop),
+                "from_ndvi": float(prev["mean_ndvi"]),
+                "to_ndvi": float(curr["mean_ndvi"]),
+                "type": "ndvi_dip",
+            })
+    return events
+
+
+def _detect_ndvi_surge(scenes_df: pd.DataFrame, surge_threshold: float = 0.15) -> list[dict[str, Any]]:
+    """Detect rapid NDVI increases between consecutive scenes."""
+    if len(scenes_df) < 2:
+        return []
+    events = []
+    sorted_df = scenes_df.sort_values("doy").reset_index(drop=True)
+    for i in range(1, len(sorted_df)):
+        prev = sorted_df.iloc[i - 1]
+        curr = sorted_df.iloc[i]
+        gain = curr["mean_ndvi"] - prev["mean_ndvi"]
+        if gain >= surge_threshold:
+            events.append({
+                "doy": int(curr["doy"]),
+                "gain": float(gain),
+                "from_ndvi": float(prev["mean_ndvi"]),
+                "to_ndvi": float(curr["mean_ndvi"]),
+                "type": "ndvi_surge",
+            })
+    return events
+
+
+def _build_crop_specific_captions(crop_name: str, events: list[dict[str, Any]], weather_df: pd.DataFrame, scenes_df: pd.DataFrame) -> list[str]:
+    """Generate crop-specific heuristic captions using strategy guide terminology."""
+    captions: list[str] = []
+    
+    if crop_name == "Soybeans":
+        # R1-R5 window: roughly DOY 180-250 for Midwest soybeans
+        r1_r5_mask = weather_df["doy"].between(180, 250)
+        r1_r5_weather = weather_df[r1_r5_mask]
+        
+        if not r1_r5_weather.empty:
+            r1_r5_precip = r1_r5_weather["PRECTOTCORR_in"].sum()
+            r1_r5_heat = (r1_r5_weather["T2M_MAX"] > 95).sum()
+            
+            if r1_r5_heat == 0:
+                captions.append("No heat stress during R1-R5 reproductive window — favorable for pod set and seed fill.")
+            else:
+                captions.append(f"{r1_r5_heat} heat-stress day(s) during R1-R5; monitor pod abortion risk.")
+            
+            if r1_r5_precip < 5.0:
+                captions.append(f"Dry R1-R5 window ({r1_r5_precip:.1f} in); watch for moisture stress during pod fill.")
+        
+        # Check NDVI peak timing for soybeans
+        if not scenes_df.empty:
+            peak_idx = scenes_df["mean_ndvi"].idxmax()
+            peak_doy = int(scenes_df.loc[peak_idx, "doy"])
+            if 220 <= peak_doy <= 260:
+                captions.append(f"Peak NDVI at DOY {peak_doy} aligns with typical soybean reproductive canopy.")
+    
+    elif crop_name == "Corn":
+        # VT/R1 pollination window: roughly DOY 190-210 for Midwest corn
+        pollination_mask = weather_df["doy"].between(190, 210)
+        poll_weather = weather_df[pollination_mask]
+        
+        if not poll_weather.empty:
+            poll_heat = (poll_weather["T2M_MAX"] > 95).sum()
+            if poll_heat == 0:
+                captions.append("Pollination window (VT/R1) stayed below heat-stress threshold — good kernel set potential.")
+            else:
+                captions.append(f"{poll_heat} heat-stress day(s) during pollination; potential kernel set risk.")
+        
+        # R3 milk stage: roughly DOY 210-230
+        r3_mask = weather_df["doy"].between(210, 230)
+        r3_weather = weather_df[r3_mask]
+        if not r3_weather.empty:
+            r3_precip = r3_weather["PRECTOTCORR_in"].sum()
+            if r3_precip < 3.0:
+                captions.append(f"Limited moisture during grain fill (R3); yield potential may be capped.")
+    
+    return captions
+
+
+# ---------------------------------------------------------------------------
 # Dashboard rendering
 # ---------------------------------------------------------------------------
 def _smooth_loess(x: np.ndarray, y: np.ndarray, frac: float = 0.3) -> np.ndarray:
@@ -374,15 +538,50 @@ def _render_dashboard(
     stats_line += f"  |  Final GDD: {final_gdd:.0f} °F·day"
     lines.append(stats_line)
 
-    # Heuristic callouts vs 5-year reference
+    # Detect events
+    heavy_rain = _detect_heavy_rain(weather_df)
+    heat_waves = _detect_heat_waves(weather_df, threshold=args.heat_stress_threshold)
+    cool_periods = _detect_cool_periods(weather_df)
+    ndvi_dips = _detect_ndvi_dips(scenes_df)
+    ndvi_surges = _detect_ndvi_surge(scenes_df)
+    crop_captions = _build_crop_specific_captions(crop_name, [], weather_df, scenes_df)
+    
+    # Heuristic callouts vs 5-year reference + events
     callouts: list[str] = []
+    
+    # Event-based callouts (prioritized)
+    if heat_waves:
+        hw = heat_waves[0]
+        callouts.append(f"• Heat wave DOY {hw['start_doy']}-{hw['end_doy']} ({hw['length']} days >{args.heat_stress_threshold}°F).")
+    
+    if heavy_rain:
+        hr = heavy_rain[0]
+        callouts.append(f"• Heavy rain event DOY {hr['doy']}: {hr['amount_in']:.1f} inches.")
+    
+    if cool_periods:
+        cp = cool_periods[0]
+        callouts.append(f"• Cool period DOY {cp['start_doy']}-{cp['end_doy']} (slowed GDD accumulation).")
+    
+    if ndvi_surges:
+        ns = ndvi_surges[0]
+        callouts.append(f"• Rapid green-up DOY {ns['doy']}: NDVI +{ns['gain']:.2f}.")
+    
+    if ndvi_dips:
+        nd = ndvi_dips[0]
+        callouts.append(f"• NDVI dip DOY {nd['doy']}: drop of {nd['drop']:.2f}.")
+    
+    # Crop-specific captions
+    for caption in crop_captions:
+        callouts.append(f"• {caption}")
+    
+    # Reference comparison callouts
     if ref_stats:
         if peak_doy and ref_stats.get("avg_peak_ndvi_doy"):
             delta = peak_doy - ref_stats["avg_peak_ndvi_doy"]
             if abs(delta) > 7:
                 direction = "later" if delta > 0 else "earlier"
                 callouts.append(
-                    f"• Peak NDVI arrived ~{abs(delta)} days {direction} than the 5-yr avg (DOY {ref_stats['avg_peak_ndvi_doy']})."
+                    f"• Peak NDVI ~{abs(delta)} days {direction} than 5-yr avg."
                 )
         if ref_stats.get("avg_season_precip_in"):
             ratio = season_precip / ref_stats["avg_season_precip_in"]
@@ -400,10 +599,8 @@ def _render_dashboard(
                 callouts.append(f"• Cool season: final GDD {ratio_gdd:.0%} of 5-yr avg.")
             elif ratio_gdd > 1.1:
                 callouts.append(f"• Warm season: final GDD {ratio_gdd:.0%} of 5-yr avg.")
-    else:
-        callouts.append("• 5-year reference data unavailable for comparison.")
-
-    lines.append("  ".join(callouts) if callouts else "")
+    
+    lines.append("  ".join(callouts[:4]) if callouts else "")  # Limit to 4 callouts for space
 
     title_ax.text(
         0.5, 0.95, lines[0], transform=title_ax.transAxes,
@@ -443,6 +640,24 @@ def _render_dashboard(
                 peak_doy + 2, 0.92, f"Peak\nDOY {peak_doy}",
                 fontsize=8, color="#ea580c", va="top",
             )
+        
+        # Annotate NDVI surges and dips
+        for surge in ndvi_surges:
+            ax_ndvi.annotate(
+                f"+{surge['gain']:.2f}",
+                xy=(surge["doy"], surge["to_ndvi"]),
+                xytext=(surge["doy"], surge["to_ndvi"] + 0.08),
+                fontsize=7, color="#16a34a", ha="center",
+                arrowprops=dict(arrowstyle="->", color="#16a34a", lw=0.8),
+            )
+        for dip in ndvi_dips:
+            ax_ndvi.annotate(
+                f"-{dip['drop']:.2f}",
+                xy=(dip["doy"], dip["to_ndvi"]),
+                xytext=(dip["doy"], dip["to_ndvi"] - 0.08),
+                fontsize=7, color="#dc2626", ha="center",
+                arrowprops=dict(arrowstyle="->", color="#dc2626", lw=0.8),
+            )
     else:
         ax_ndvi.text(0.5, 0.5, "No Sentinel NDVI scenes available", ha="center", va="center",
                      transform=ax_ndvi.transAxes, color="#64748b", fontsize=10)
@@ -461,6 +676,10 @@ def _render_dashboard(
         ax_precip.bar(weather_df["doy"], weather_df["PRECTOTCORR_in"], color="#2563eb", alpha=0.6, width=0.8)
         roll7 = weather_df.set_index("doy")["PRECTOTCORR_in"].rolling(7, min_periods=1).mean().reindex(range(60, 321), fill_value=0)
         ax_precip.plot(roll7.index, roll7.values, color="#1e40af", linewidth=1.5, alpha=0.8)
+        
+        # Highlight heavy rain days
+        for hr in heavy_rain:
+            ax_precip.bar(hr["doy"], hr["amount_in"], color="#dc2626", alpha=0.8, width=0.8, zorder=3)
     else:
         ax_precip.text(0.5, 0.5, "No weather data", ha="center", va="center",
                        transform=ax_precip.transAxes, color="#64748b", fontsize=10)
@@ -482,7 +701,17 @@ def _render_dashboard(
         ax_temp.fill_between(doy_range, tmin.values, tmax.values, color="#fca5a5", alpha=0.35, label="Min–Max")
         ax_temp.plot(doy_range, tmean.values, color="#dc2626", linewidth=1.2, label="Mean")
         ax_temp.axhline(y=args.heat_stress_threshold, color="#ea580c", linestyle="--", alpha=0.5, linewidth=1.0)
-        ax_temp.set_ylim(tmin.min() * 0.95, tmax.max() * 1.05)
+        
+        # Shade heat wave periods
+        for hw in heat_waves:
+            ax_temp.axvspan(hw["start_doy"], hw["end_doy"], alpha=0.15, color="#dc2626", zorder=0)
+            ax_temp.text(
+                hw["start_doy"], tmax.max() * 1.02,
+                f"Heat wave\nDOY {hw['start_doy']}-{hw['end_doy']}",
+                fontsize=7, color="#dc2626", ha="left", va="top",
+            )
+        
+        ax_temp.set_ylim(tmin.min() * 0.95, tmax.max() * 1.08)
         ax_temp.legend(loc="upper left", fontsize=8)
     else:
         ax_temp.text(0.5, 0.5, "No weather data", ha="center", va="center",

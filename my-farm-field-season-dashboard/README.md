@@ -123,8 +123,36 @@ The dashboard includes a title block with:
 - Heat-stress day count (days > 95°F)
 - Final cumulative GDD
 
-When 5 years of historical data are available for the same field, heuristic
-captions are generated automatically:
+### Event detection
+
+The script automatically detects and highlights:
+
+| Event | Detection Rule | Visual Indicator |
+|-------|---------------|------------------|
+| **Heavy rain** | >1 inch in 24 hours | Red bars on precipitation panel |
+| **Heat waves** | 3+ consecutive days >95°F | Red shaded bands on temperature panel |
+| **Cool periods** | 7+ days with GDD <50% of rolling average | Reported in caption |
+| **NDVI surges** | Rapid green-up (>0.15 NDVI gain) | Green arrow annotations on NDVI panel |
+| **NDVI dips** | Sudden drop (>0.10 NDVI loss) | Red arrow annotations on NDVI panel |
+
+### Crop-specific interpretation
+
+Using corn/soybean strategy guide terminology:
+
+**For soybeans:**
+- Evaluates R1-R5 reproductive window conditions (DOY 180–250)
+- Flags heat stress during pod set and seed fill
+- Notes moisture adequacy during pod fill
+- Compares peak NDVI timing to typical soybean canopy
+
+**For corn:**
+- Evaluates VT/R1 pollination window (DOY 190–210)
+- Flags heat stress during kernel set
+- Notes moisture during R3 grain fill
+
+### Reference comparison
+
+When 5 years of historical data are available:
 
 - "Peak NDVI arrived ~X days later than the 5-yr avg"
 - "Drier-than-average season (Y% of 5-yr avg)"
