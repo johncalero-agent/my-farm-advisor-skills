@@ -56,7 +56,7 @@ python scripts/generate_field_season_dashboard.py \
   --grower-slug il-dekalb-grower \
   --farm-slug dekalb-demo-farm \
   --field-slug osm-1062497612 \
-  --year 2024 \
+  --year 2022 \
   --state-fips 17
 ```
 
@@ -70,8 +70,8 @@ ${DATA_PIPELINE_DATA_ROOT}/data-pipeline/growers/<grower>/farms/<farm>/fields/<f
 The example below was generated for:
 
 - **Field:** `osm-1062497612`
-- **Year:** 2024
-- **Crop:** **Corn** (78.0% dominant from CDL tables for that field-year)
+- **Year:** **2022**
+- **Crop:** **Soybeans** (72.4% dominant from CDL tables for that field-year)
 - **Location:** DeKalb County, Illinois (state FIPS 17)
 - **Grower:** `il-dekalb-grower`
 - **Farm:** `dekalb-demo-farm`
@@ -80,20 +80,20 @@ The example below was generated for:
 
 | Criterion | Assessment |
 |-----------|------------|
-| CDL crop clarity | Corn at 78.0% — clean, unambiguous dominant crop |
-| Weather completeness | 366 daily records (2024 is a leap year) |
-| Sentinel NDVI coverage | 8 scenes: Mar–Oct (monthly coverage through growing season) |
-| 5-year reference | 2021–2023 + 2025 available for comparison |
+| CDL crop clarity | Soybeans at 72.4% — clean dominant crop |
+| Weather completeness | 365 daily records (standard year, no leap-year bias) |
+| Sentinel NDVI coverage | 9 scenes: Mar–Nov (best coverage of any year) |
+| 5-year reference | 2021, 2023, 2024, 2025 available for comparison |
 | Data cleanliness | No gaps, no errors in pipeline outputs |
 
 ### Dashboard highlights
 
-- **Peak NDVI:** 0.620 on DOY 220 (early August)
-- **Season precipitation:** 33.0 inches
-- **Heat stress days:** 0.7 days (>/95°F)
-- **Final cumulative GDD:** 3,425 °F·day
+- **Peak NDVI:** 0.604 on DOY 243 (late August — typical for soybeans)
+- **Season precipitation:** 28.7 inches
+- **Heat stress days:** 0.0 days (>/95°F)
+- **Final cumulative GDD:** 3,693 °F·day
 
-> See `examples/osm-1062497612_2024_dashboard.png` for the example output.
+> See `examples/osm-1062497612_2022_dashboard.png` for the example output.
 
 ## How to rerun
 
@@ -146,5 +146,5 @@ my-farm-field-season-dashboard/
 ├── scripts/
 │   └── generate_field_season_dashboard.py
 └── examples/
-    └── osm-1062497612_2024_dashboard.png
+    └── osm-1062497612_2022_dashboard.png
 ```
