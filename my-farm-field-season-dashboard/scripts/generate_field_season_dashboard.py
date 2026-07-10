@@ -279,8 +279,9 @@ def _build_reference_stats(
 
     all_weather = pd.concat(weather_frames, ignore_index=True)
 
-    # Reference GDD
+    # Reference GDD (from planting date)
     all_weather["gdd"] = _compute_gdd_series(all_weather, base=args.gdd_base, cap=args.gdd_cap)
+    all_weather["gdd"] = all_weather["gdd"].where(all_weather["doy"] >= args.planting_doy, 0.0)
     gdd_by_doy = all_weather.groupby("doy")["gdd"].mean().cumsum()
 
     # Reference precip
@@ -626,10 +627,12 @@ def _render_dashboard(
 
     # Compute current-year metrics
     weather_df["gdd"] = _compute_gdd_series(weather_df, base=args.gdd_base, cap=args.gdd_cap)
+    # Reset GDD to 0 before planting window for agronomic relevance
+    weather_df["gdd"] = weather_df["gdd"].where(weather_df["doy"] >= args.planting_doy, 0.0)
     weather_df["cum_gdd"] = weather_df["gdd"].cumsum()
     season_precip = float(weather_df["PRECTOTCORR_in"].sum())
     heat_days = int((weather_df["T2M_MAX"] > args.heat_stress_threshold).sum())
-    final_gdd = float(weather_df["cum_gdd"].iloc[-1])
+    season_gdd = float(weather_df.loc[weather_df["doy"] >= args.planting_doy, "cum_gdd"].iloc[-1] if not weather_df[weather_df["doy"] >= args.planting_doy].empty else 0.0)
 
     peak_ndvi = None
     peak_doy = None
@@ -659,7 +662,7 @@ def _render_dashboard(
     stats_line = f"Peak NDVI: {peak_ndvi:.3f} on DOY {peak_doy}" if peak_ndvi else "Peak NDVI: N/A"
     stats_line += f"  |  Precip: {season_precip:.1f} in"
     stats_line += f"  |  Heat stress days (>{args.heat_stress_threshold}°F): {heat_days}"
-    stats_line += f"  |  Final GDD: {final_gdd:.0f} °F·day"
+    stats_line += f"  |  Season GDD: {season_gdd:.0f} °F·day"
     lines.append(stats_line)
 
     # Detect events
@@ -670,61 +673,46 @@ def _render_dashboard(
     ndvi_surges = _detect_ndvi_surge(scenes_df)
     crop_captions = _build_crop_specific_captions(crop_name, [], weather_df, scenes_df)
     
-    # Heuristic callouts vs 5-year reference + events
+    # Cross-panel story captions
     callouts: list[str] = []
     
-    # Event-based callouts (prioritized)
+    # Connect NDVI peak to weather
+    if peak_doy:
+        # Find rain in the 2 weeks before peak
+        pre_peak = weather_df[weather_df["doy"].between(peak_doy - 14, peak_doy)]
+        pre_peak_rain = pre_peak["PRECTOTCORR_in"].sum() if not pre_peak.empty else 0
+        if pre_peak_rain > 1.0:
+            callouts.append(f"• NDVI peak DOY {peak_doy} (panel 1) follows {pre_peak_rain:.1f} in rain (panel 2).")
+        else:
+            callouts.append(f"• NDVI peak DOY {peak_doy} (panel 1) with limited pre-peak rain.")
+    
+    # Connect heat stress to crop windows
     if heat_waves:
         hw = heat_waves[0]
-        callouts.append(f"• Heat wave DOY {hw['start_doy']}-{hw['end_doy']} ({hw['length']} days >{args.heat_stress_threshold}°F).")
+        callouts.append(f"• Heat wave DOY {hw['start_doy']}-{hw['end_doy']} (panel 3) — {hw['length']} days >{args.heat_stress_threshold}°F.")
+    elif heat_days == 0:
+        callouts.append(f"• No heat stress days (panel 3) — favorable temperature regime.")
     
-    if heavy_rain:
-        hr = heavy_rain[0]
-        callouts.append(f"• Heavy rain event DOY {hr['doy']}: {hr['amount_in']:.1f} inches.")
+    # Connect GDD to season progress
+    if ref_stats and ref_stats.get("avg_final_gdd"):
+        ratio_gdd = season_gdd / ref_stats["avg_final_gdd"]
+        if ratio_gdd > 1.1:
+            callouts.append(f"• Warm season: GDD {ratio_gdd:.0%} of 5-yr avg (panel 4).")
+        elif ratio_gdd < 0.9:
+            callouts.append(f"• Cool season: GDD {ratio_gdd:.0%} of 5-yr avg (panel 4).")
+        else:
+            callouts.append(f"• GDD near 5-yr average (panel 4).")
     
-    if cool_periods:
-        cp = cool_periods[0]
-        callouts.append(f"• Cool period DOY {cp['start_doy']}-{cp['end_doy']} (slowed GDD accumulation).")
-    
-    if ndvi_surges:
-        ns = ndvi_surges[0]
-        callouts.append(f"• Rapid green-up DOY {ns['doy']}: NDVI +{ns['gain']:.2f}.")
-    
-    if ndvi_dips:
-        nd = ndvi_dips[0]
-        callouts.append(f"• NDVI dip DOY {nd['doy']}: drop of {nd['drop']:.2f}.")
-    
-    # Crop-specific captions
-    for caption in crop_captions:
+    # Crop-specific context
+    for caption in crop_captions[:1]:  # Limit to 1 crop caption
         callouts.append(f"• {caption}")
     
-    # Reference comparison callouts
-    if ref_stats:
-        if peak_doy and ref_stats.get("avg_peak_ndvi_doy"):
-            delta = peak_doy - ref_stats["avg_peak_ndvi_doy"]
-            if abs(delta) > 7:
-                direction = "later" if delta > 0 else "earlier"
-                callouts.append(
-                    f"• Peak NDVI ~{abs(delta)} days {direction} than 5-yr avg."
-                )
-        if ref_stats.get("avg_season_precip_in"):
-            ratio = season_precip / ref_stats["avg_season_precip_in"]
-            if ratio < 0.8:
-                callouts.append(f"• Drier-than-average season ({ratio:.0%} of 5-yr avg).")
-            elif ratio > 1.2:
-                callouts.append(f"• Wetter-than-average season ({ratio:.0%} of 5-yr avg).")
-        if ref_stats.get("avg_heat_stress_days"):
-            delta_heat = heat_days - ref_stats["avg_heat_stress_days"]
-            if delta_heat > 3:
-                callouts.append(f"• Above-normal heat stress (+{delta_heat:.0f} days vs. 5-yr avg).")
-        if ref_stats.get("avg_final_gdd"):
-            ratio_gdd = final_gdd / ref_stats["avg_final_gdd"]
-            if ratio_gdd < 0.9:
-                callouts.append(f"• Cool season: final GDD {ratio_gdd:.0%} of 5-yr avg.")
-            elif ratio_gdd > 1.1:
-                callouts.append(f"• Warm season: final GDD {ratio_gdd:.0%} of 5-yr avg.")
+    # NDVI pattern changes
+    if ndvi_surges:
+        ns = ndvi_surges[0]
+        callouts.append(f"• Rapid green-up DOY {ns['doy']} (panel 1): +{ns['gain']:.2f} NDVI.")
     
-    lines.append("  ".join(callouts[:4]) if callouts else "")  # Limit to 4 callouts for space
+    lines.append("  ".join(callouts[:3]) if callouts else "")  # Limit to 3 callouts for space
 
     title_ax.text(
         0.5, 0.95, lines[0], transform=title_ax.transAxes,
@@ -740,6 +728,21 @@ def _render_dashboard(
             fontsize=9.5, color="#475569", ha="center", va="top", wrap=True,
         )
 
+    # Define key dates for vertical scan lines
+    scan_dates: list[int] = []
+    if peak_doy:
+        scan_dates.append(peak_doy)
+    if heavy_rain:
+        scan_dates.append(heavy_rain[0]["doy"])
+    
+    # Define crop-specific growth windows for shading
+    if crop_name == "Soybeans":
+        repro_start, repro_end = 180, 250  # R1-R5 window
+    elif crop_name == "Corn":
+        repro_start, repro_end = 190, 230  # VT/R1 to R3
+    else:
+        repro_start, repro_end = 150, 250  # Generic growing season
+    
     # Panel 1: NDVI
     ax_ndvi = fig.add_subplot(gs[1, 0])
     ax_ndvi.set_facecolor("#ffffff")
@@ -749,7 +752,16 @@ def _render_dashboard(
     ax_ndvi.tick_params(axis="both", labelsize=9)
     ax_ndvi.set_xlim(args.planting_doy, 320)
     ax_ndvi.set_ylim(-0.1, 1.0)
-
+    
+    # Growth stage shading
+    ax_ndvi.axvspan(repro_start, repro_end, alpha=0.06, color="#7c3aed", zorder=0)
+    ax_ndvi.text(repro_start, 0.98, f"{crop_name} Reproductive", fontsize=7, color="#7c3aed", 
+                 ha="left", va="top", transform=ax_ndvi.get_xaxis_transform())
+    
+    # Vertical scan lines
+    for sd in scan_dates:
+        ax_ndvi.axvline(x=sd, color="#94a3b8", linestyle=":", alpha=0.4, zorder=0)
+    
     if not scenes_df.empty:
         ax_ndvi.scatter(
             scenes_df["doy"], scenes_df["mean_ndvi"],
@@ -795,6 +807,13 @@ def _render_dashboard(
     ax_precip.tick_params(axis="both", labelsize=9)
     ax_precip.set_xlim(args.planting_doy, 320)
     ax_precip.set_ylim(0, max(weather_df["PRECTOTCORR_in"].max() * 1.2, 0.5))
+    
+    # Growth stage shading
+    ax_precip.axvspan(repro_start, repro_end, alpha=0.06, color="#7c3aed", zorder=0)
+    
+    # Vertical scan lines
+    for sd in scan_dates:
+        ax_precip.axvline(x=sd, color="#94a3b8", linestyle=":", alpha=0.4, zorder=0)
 
     if not weather_df.empty:
         ax_precip.bar(weather_df["doy"], weather_df["PRECTOTCORR_in"], color="#2563eb", alpha=0.6, width=0.8)
@@ -802,8 +821,13 @@ def _render_dashboard(
         ax_precip.plot(roll7.index, roll7.values, color="#1e40af", linewidth=1.5, alpha=0.8)
         
         # Highlight heavy rain days
-        for hr in heavy_rain:
+        for hr in heavy_rain[:2]:  # Annotate top 2
             ax_precip.bar(hr["doy"], hr["amount_in"], color="#dc2626", alpha=0.8, width=0.8, zorder=3)
+            ax_precip.text(
+                hr["doy"], hr["amount_in"] + 0.05,
+                f"{hr['amount_in']:.1f} in",
+                fontsize=7, color="#dc2626", ha="center", va="bottom",
+            )
     else:
         ax_precip.text(0.5, 0.5, "No weather data", ha="center", va="center",
                        transform=ax_precip.transAxes, color="#64748b", fontsize=10)
@@ -816,6 +840,13 @@ def _render_dashboard(
     ax_temp.set_title("Temperature Extremes", fontsize=12, fontweight="bold", loc="left")
     ax_temp.tick_params(axis="both", labelsize=9)
     ax_temp.set_xlim(args.planting_doy, 320)
+    
+    # Growth stage shading
+    ax_temp.axvspan(repro_start, repro_end, alpha=0.06, color="#7c3aed", zorder=0)
+    
+    # Vertical scan lines
+    for sd in scan_dates:
+        ax_temp.axvline(x=sd, color="#94a3b8", linestyle=":", alpha=0.4, zorder=0)
 
     if not weather_df.empty:
         tmin = weather_df.set_index("doy")["T2M_MIN"].reindex(range(60, 321))
@@ -851,6 +882,13 @@ def _render_dashboard(
                      fontsize=12, fontweight="bold", loc="left")
     ax_gdd.tick_params(axis="both", labelsize=9)
     ax_gdd.set_xlim(args.planting_doy, 320)
+    
+    # Growth stage shading
+    ax_gdd.axvspan(repro_start, repro_end, alpha=0.06, color="#7c3aed", zorder=0)
+    
+    # Vertical scan lines
+    for sd in scan_dates:
+        ax_gdd.axvline(x=sd, color="#94a3b8", linestyle=":", alpha=0.4, zorder=0)
 
     if not weather_df.empty:
         gdd_series = weather_df.set_index("doy")["cum_gdd"].reindex(range(60, 321))
@@ -859,8 +897,21 @@ def _render_dashboard(
             ref_gdd = ref_stats["gdd_by_doy"].reindex(range(60, 321), fill_value=0)
             ax_gdd.plot(ref_gdd.index, ref_gdd.values, color="#a78bfa", linewidth=1.5,
                         linestyle="--", label="5-yr avg", alpha=0.8)
+        # GDD milestone markers
+        milestones = [1000, 2000, 3000]
+        for m in milestones:
+            crossing = gdd_series[gdd_series >= m]
+            if not crossing.empty:
+                cross_doy = int(crossing.index[0])
+                ax_gdd.axhline(y=m, color="#a78bfa", linestyle="--", alpha=0.3, linewidth=0.8)
+                ax_gdd.text(
+                    cross_doy, m + 50,
+                    f"{m} GDD",
+                    fontsize=7, color="#7c3aed", ha="left", va="bottom",
+                )
+        
         ax_gdd.legend(loc="upper left", fontsize=8)
-        ax_gdd.set_ylim(0, max(gdd_series.max() * 1.1, 500))
+        ax_gdd.set_ylim(0, max(gdd_series.max() * 1.15, 500))
     else:
         ax_gdd.text(0.5, 0.5, "No weather data", ha="center", va="center",
                     transform=ax_gdd.transAxes, color="#64748b", fontsize=10)

@@ -91,7 +91,33 @@ The example below was generated for:
 - **Peak NDVI:** 0.604 on DOY 243 (late August — typical for soybeans)
 - **Season precipitation:** 28.7 inches
 - **Heat stress days:** 0.0 days (>/95°F)
-- **Final cumulative GDD:** 3,693 °F·day
+- **Season GDD:** 3,165 °F·day (from DOY 90 planting window)
+
+### Dashboard features
+
+**Cross-panel alignment:**
+- Vertical dotted lines at peak NDVI and major rain events span all 4 panels
+- Purple shading marks the reproductive growth window (R1-R5 for soybeans)
+
+**Panel 1 — NDVI:**
+- CDL-masked Sentinel mean with LOESS smoothing
+- Green arrows mark rapid green-up (+NDVI)
+- Red arrows mark NDVI dips
+- Peak annotated with DOY label
+
+**Panel 2 — Precipitation:**
+- Daily bars with 7-day rolling average
+- Heavy rain events (>1 inch) highlighted in red with amount labels
+
+**Panel 3 — Temperature:**
+- Min/max fill-between band with mean line
+- Heat wave periods shaded in red
+- 95°F threshold line for stress identification
+
+**Panel 4 — Cumulative GDD:**
+- Accumulated from planting window (default DOY 90)
+- 5-year average comparison (dashed line)
+- Milestone markers at 1,000 / 2,000 / 3,000 GDD
 
 > See `examples/osm-1062497612_2022_dashboard.png` for the example output.
 
