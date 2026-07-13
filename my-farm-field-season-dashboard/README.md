@@ -90,6 +90,26 @@ All inputs come from the approved `data-pipeline` runtime area:
 | GDD (daily) | `max(0, min((Tmax+Tmin)/2, 86) - 50)` | °F·day |
 | Cumulative GDD | Sum from planting window (default DOY 90) | °F·day |
 
+### Generated output paths
+
+```
+growers/<g>/farms/<f>/fields/<field>/derived/reports/<field>_<year>_season_dashboard.png
+growers/<g>/farms/<f>/fields/<field>/derived/reports/<field>_<year>_season_dashboard.html
+```
+
+### How to rerun
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/path/to/my-farm-advisor-runtime
+
+python scripts/generate_field_season_dashboard.py \
+  --grower-slug il-dekalb-grower \
+  --farm-slug dekalb-demo-farm \
+  --field-slug osm-1062497612 \
+  --year 2022 \
+  --state-fips 17
+```
+
 ### Known data limitations
 
 - **5-year reference stats** require historical weather and NDVI for the same field; if missing, the reference comparison degrades gracefully to a plain data summary
