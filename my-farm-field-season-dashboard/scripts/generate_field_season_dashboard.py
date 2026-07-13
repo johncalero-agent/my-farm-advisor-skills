@@ -625,9 +625,9 @@ def _render_dashboard(
     args: argparse.Namespace,
     quality: dict[str, Any] | None = None,
 ) -> plt.Figure:
-    fig = plt.figure(figsize=(14, 16))
+    fig = plt.figure(figsize=(14, 17))
     fig.patch.set_facecolor("#fafaf9")
-    gs = fig.add_gridspec(5, 1, height_ratios=[0.12, 1.0, 1.0, 1.0, 1.0], hspace=0.22)
+    gs = fig.add_gridspec(5, 1, height_ratios=[0.15, 1.0, 1.0, 1.0, 1.0], hspace=0.20)
 
     # Title / stats box
     title_ax = fig.add_subplot(gs[0, 0])
@@ -649,30 +649,6 @@ def _render_dashboard(
         peak_ndvi = float(scenes_df.loc[peak_idx, "mean_ndvi"])
         peak_doy = int(scenes_df.loc[peak_idx, "doy"])
 
-    # Build caption lines
-    lines = [f"{year} Season — {crop_name}  |  Field: {field_slug}"]
-    
-    # Quality indicators
-    if quality:
-        qw = quality.get("weather", {})
-        qn = quality.get("ndvi", {})
-        qc = quality.get("cdl", {})
-        
-        qw_badge = _format_quality_badge(qw.get("status", "unknown"))
-        qn_badge = _format_quality_badge(qn.get("status", "unknown"))
-        qc_badge = _format_quality_badge(qc.get("status", "unknown"))
-        
-        quality_line = f"{qw_badge} Weather: {qw.get('actual_days', '?')}/{qw.get('expected_days', '?')} days ({qw.get('completeness_pct', 0):.0f}%)"
-        quality_line += f"  |  {qn_badge} NDVI: {qn.get('n_scenes', '?')} scenes"
-        quality_line += f"  |  {qc_badge} CDL: {qc.get('crop_name', '?')} {qc.get('dominance_pct', 0):.1f}%"
-        lines.append(quality_line)
-    
-    stats_line = f"Peak NDVI: {peak_ndvi:.3f} on DOY {peak_doy}" if peak_ndvi else "Peak NDVI: N/A"
-    stats_line += f"  |  Precip: {season_precip:.1f} in"
-    stats_line += f"  |  Heat stress days (>{args.heat_stress_threshold}°F): {heat_days}"
-    stats_line += f"  |  Season GDD: {season_gdd:.0f} °F·day"
-    lines.append(stats_line)
-
     # Detect events
     heavy_rain = _detect_heavy_rain(weather_df)
     heat_waves = _detect_heat_waves(weather_df, threshold=args.heat_stress_threshold)
@@ -680,60 +656,40 @@ def _render_dashboard(
     ndvi_dips = _detect_ndvi_dips(scenes_df)
     ndvi_surges = _detect_ndvi_surge(scenes_df)
     crop_captions = _build_crop_specific_captions(crop_name, [], weather_df, scenes_df)
-    
-    # Cross-panel story captions
-    callouts: list[str] = []
-    
-    # Connect NDVI peak to weather
-    if peak_doy:
-        # Find rain in the 2 weeks before peak
-        pre_peak = weather_df[weather_df["doy"].between(peak_doy - 14, peak_doy)]
-        pre_peak_rain = pre_peak["PRECTOTCORR_in"].sum() if not pre_peak.empty else 0
-        if pre_peak_rain > 1.0:
-            callouts.append(f"• NDVI peak DOY {peak_doy} (panel 1) follows {pre_peak_rain:.1f} in rain (panel 2).")
-        else:
-            callouts.append(f"• NDVI peak DOY {peak_doy} (panel 1) with limited pre-peak rain.")
-    
-    # Connect heat stress to crop windows
-    if heat_waves:
-        hw = heat_waves[0]
-        callouts.append(f"• Heat wave DOY {hw['start_doy']}-{hw['end_doy']} (panel 3) — {hw['length']} days >{args.heat_stress_threshold}°F.")
-    elif heat_days == 0:
-        callouts.append(f"• No heat stress days (panel 3) — favorable temperature regime.")
-    
-    # Connect GDD to season progress
-    if ref_stats and ref_stats.get("avg_final_gdd"):
-        ratio_gdd = season_gdd / ref_stats["avg_final_gdd"]
-        if ratio_gdd > 1.1:
-            callouts.append(f"• Warm season: GDD {ratio_gdd:.0%} of 5-yr avg (panel 4).")
-        elif ratio_gdd < 0.9:
-            callouts.append(f"• Cool season: GDD {ratio_gdd:.0%} of 5-yr avg (panel 4).")
-        else:
-            callouts.append(f"• GDD near 5-yr average (panel 4).")
-    
-    # Crop-specific context
-    for caption in crop_captions[:1]:  # Limit to 1 crop caption
-        callouts.append(f"• {caption}")
-    
-    # NDVI pattern changes
-    if ndvi_surges:
-        ns = ndvi_surges[0]
-        callouts.append(f"• Rapid green-up DOY {ns['doy']} (panel 1): +{ns['gain']:.2f} NDVI.")
-    
-    lines.append("  ".join(callouts[:3]) if callouts else "")  # Limit to 3 callouts for space
 
+    # Build title lines — clean 3-line header
+    lines = [f"{year} Season — {crop_name}  |  Field: {field_slug}"]
+    
+    stats_line = f"Peak NDVI: {peak_ndvi:.3f} on DOY {peak_doy}" if peak_ndvi else "Peak NDVI: N/A"
+    stats_line += f"  |  Precip: {season_precip:.1f} in"
+    stats_line += f"  |  Heat stress: {heat_days} days >{args.heat_stress_threshold}°F"
+    stats_line += f"  |  GDD: {season_gdd:.0f} °F·day"
+    lines.append(stats_line)
+    
+    # Quality indicators (compact)
+    if quality:
+        qw = quality.get("weather", {})
+        qn = quality.get("ndvi", {})
+        qc = quality.get("cdl", {})
+        qw_badge = _format_quality_badge(qw.get("status", "unknown"))
+        qn_badge = _format_quality_badge(qn.get("status", "unknown"))
+        qc_badge = _format_quality_badge(qc.get("status", "unknown"))
+        quality_line = f"Quality  {qw_badge} Weather  {qn_badge} NDVI  {qc_badge} CDL"
+        lines.append(quality_line)
+
+    # Render title with better vertical spacing
     title_ax.text(
-        0.5, 0.95, lines[0], transform=title_ax.transAxes,
-        fontsize=16, fontweight="bold", color="#0f172a", ha="center", va="top",
+        0.5, 0.90, lines[0], transform=title_ax.transAxes,
+        fontsize=15, fontweight="bold", color="#0f172a", ha="center", va="top",
     )
     title_ax.text(
-        0.5, 0.55, lines[1], transform=title_ax.transAxes,
-        fontsize=10.5, color="#334155", ha="center", va="top",
+        0.5, 0.50, lines[1], transform=title_ax.transAxes,
+        fontsize=10, color="#334155", ha="center", va="top",
     )
     if len(lines) > 2 and lines[2]:
         title_ax.text(
-            0.5, 0.18, lines[2], transform=title_ax.transAxes,
-            fontsize=9.5, color="#475569", ha="center", va="top", wrap=True,
+            0.5, 0.15, lines[2], transform=title_ax.transAxes,
+            fontsize=9, color="#64748b", ha="center", va="top",
         )
 
     # Define key dates for vertical scan lines
@@ -806,6 +762,19 @@ def _render_dashboard(
         ax_ndvi.text(0.5, 0.5, "No Sentinel NDVI scenes available", ha="center", va="center",
                      transform=ax_ndvi.transAxes, color="#64748b", fontsize=10)
 
+    # Panel 1 callout (upper right)
+    if peak_doy:
+        ndvi_callout = f"Peak: DOY {peak_doy}\n{peak_ndvi:.3f} NDVI"
+        if ndvi_surges:
+            ns = ndvi_surges[0]
+            ndvi_callout += f"\nGreen-up: +{ns['gain']:.2f}"
+        ax_ndvi.text(
+            0.98, 0.95, ndvi_callout,
+            transform=ax_ndvi.transAxes, fontsize=8, color="#0f766e",
+            ha="right", va="top",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#f0fdf4", edgecolor="#0f766e", alpha=0.8),
+        )
+
     # Panel 2: Precipitation
     ax_precip = fig.add_subplot(gs[2, 0])
     ax_precip.set_facecolor("#ffffff")
@@ -839,6 +808,19 @@ def _render_dashboard(
     else:
         ax_precip.text(0.5, 0.5, "No weather data", ha="center", va="center",
                        transform=ax_precip.transAxes, color="#64748b", fontsize=10)
+
+    # Panel 2 callout (upper right)
+    if not weather_df.empty:
+        precip_callout = f"Total: {season_precip:.1f} in"
+        if heavy_rain:
+            hr = heavy_rain[0]
+            precip_callout += f"\nHeaviest: {hr['amount_in']:.1f} in (DOY {hr['doy']})"
+        ax_precip.text(
+            0.98, 0.95, precip_callout,
+            transform=ax_precip.transAxes, fontsize=8, color="#1e40af",
+            ha="right", va="top",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#eff6ff", edgecolor="#1e40af", alpha=0.8),
+        )
 
     # Panel 3: Temperature
     ax_temp = fig.add_subplot(gs[3, 0])
@@ -879,6 +861,21 @@ def _render_dashboard(
     else:
         ax_temp.text(0.5, 0.5, "No weather data", ha="center", va="center",
                      transform=ax_temp.transAxes, color="#64748b", fontsize=10)
+
+    # Panel 3 callout (upper right)
+    if not weather_df.empty:
+        temp_callout = f"Heat stress: {heat_days} days"
+        if heat_waves:
+            hw = heat_waves[0]
+            temp_callout += f"\nWave: DOY {hw['start_doy']}-{hw['end_doy']}"
+        else:
+            temp_callout += "\nNo heat waves"
+        ax_temp.text(
+            0.98, 0.95, temp_callout,
+            transform=ax_temp.transAxes, fontsize=8, color="#dc2626",
+            ha="right", va="top",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#fef2f2", edgecolor="#dc2626", alpha=0.8),
+        )
 
     # Panel 4: Cumulative GDD
     ax_gdd = fig.add_subplot(gs[4, 0])
@@ -923,6 +920,44 @@ def _render_dashboard(
     else:
         ax_gdd.text(0.5, 0.5, "No weather data", ha="center", va="center",
                     transform=ax_gdd.transAxes, color="#64748b", fontsize=10)
+
+    # Panel 4 callout (upper right)
+    if not weather_df.empty:
+        gdd_callout = f"Season GDD: {season_gdd:.0f}"
+        if ref_stats and ref_stats.get("avg_final_gdd"):
+            ratio = season_gdd / ref_stats["avg_final_gdd"]
+            if ratio > 1.05:
+                gdd_callout += f"\nWarm ({ratio:.0%} of avg)"
+            elif ratio < 0.95:
+                gdd_callout += f"\nCool ({ratio:.0%} of avg)"
+            else:
+                gdd_callout += "\nNear average"
+        ax_gdd.text(
+            0.98, 0.95, gdd_callout,
+            transform=ax_gdd.transAxes, fontsize=8, color="#7c3aed",
+            ha="right", va="top",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#faf5ff", edgecolor="#7c3aed", alpha=0.8),
+        )
+
+    # Bottom story caption — concise one-line summary
+    story_parts: list[str] = []
+    story_parts.append(f"{year} {crop_name}: ")
+    if heat_days == 0:
+        story_parts.append("no heat stress, ")
+    else:
+        story_parts.append(f"{heat_days} heat-stress days, ")
+    story_parts.append(f"{season_precip:.1f} in rain, ")
+    if peak_doy:
+        story_parts.append(f"peak canopy DOY {peak_doy}.")
+    else:
+        story_parts.append("peak NDVI N/A.")
+    story_text = "".join(story_parts)
+
+    fig.text(
+        0.5, 0.01, story_text,
+        ha="center", va="bottom", fontsize=9, color="#334155",
+        style="italic",
+    )
 
     return fig
 
