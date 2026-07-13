@@ -44,6 +44,7 @@ All inputs come from the approved `data-pipeline` runtime area:
 
 - Python 3.10+
 - `geopandas`, `rasterio`, `matplotlib`, `numpy`, `pandas`, `rasterstats`
+- `plotly` (optional, for interactive HTML dashboard)
 - A populated `data-pipeline` runtime with farm data (see data-pipeline README)
 
 ## Quick start
@@ -60,9 +61,11 @@ python scripts/generate_field_season_dashboard.py \
   --state-fips 17
 ```
 
-The dashboard PNG is written to:
+The script produces two outputs in the field's `derived/reports/` directory:
+
 ```
-${DATA_PIPELINE_DATA_ROOT}/data-pipeline/growers/<grower>/farms/<farm>/fields/<field>/derived/reports/<field>_<year>_season_dashboard.png
+<field>_<year>_season_dashboard.png   # static matplotlib image
+<field>_<year>_season_dashboard.html  # interactive Plotly dashboard (requires plotly)
 ```
 
 ## Example field-year
@@ -148,16 +151,22 @@ All inputs come from the approved `data-pipeline` runtime area:
 | GDD (daily) | `max(0, min((Tmax+Tmin)/2, 86) - 50)` | °F·day |
 | Cumulative GDD | Sum from planting window (default DOY 90) | °F·day |
 
-### Dashboard image path
+### Dashboard output paths
 
-Example output relative to data-pipeline:
+**Static PNG** (runtime):
 ```
 growers/il-dekalb-grower/farms/dekalb-demo-farm/fields/osm-1062497612/derived/reports/osm-1062497612_2022_season_dashboard.png
 ```
 
-Also checked into the skill as:
+**Interactive HTML** (runtime, requires `plotly`):
+```
+growers/il-dekalb-grower/farms/dekalb-demo-farm/fields/osm-1062497612/derived/reports/osm-1062497612_2022_season_dashboard.html
+```
+
+**Checked into skill examples:**
 ```
 examples/osm-1062497612_2022_dashboard.png
+examples/osm-1062497612_2022_dashboard.html
 ```
 
 ### How to rerun
@@ -272,5 +281,6 @@ my-farm-field-season-dashboard/
 ├── scripts/
 │   └── generate_field_season_dashboard.py
 └── examples/
-    └── osm-1062497612_2022_dashboard.png
+    ├── osm-1062497612_2022_dashboard.png
+    └── osm-1062497612_2022_dashboard.html
 ```

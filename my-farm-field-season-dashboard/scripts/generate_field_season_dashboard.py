@@ -45,6 +45,14 @@ from rasterio.mask import mask
 
 matplotlib.use("Agg")
 
+# Optional: Plotly for interactive HTML dashboard
+try:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    _HAS_PLOTLY = True
+except Exception:
+    _HAS_PLOTLY = False
+
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
@@ -920,6 +928,359 @@ def _render_dashboard(
 
 
 # ---------------------------------------------------------------------------
+# Interactive HTML dashboard (Plotly)
+# ---------------------------------------------------------------------------
+def _render_interactive_html(
+    scenes_df: pd.DataFrame,
+    weather_df: pd.DataFrame,
+    ref_stats: dict[str, Any] | None,
+    crop_name: str,
+    field_slug: str,
+    year: int,
+    args: argparse.Namespace,
+    quality: dict[str, Any] | None = None,
+) -> go.Figure:
+    """Render an interactive Plotly HTML dashboard with 4 aligned panels."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    # Compute metrics (same as PNG version)
+    weather_df = weather_df.copy()
+    weather_df["gdd"] = _compute_gdd_series(weather_df, base=args.gdd_base, cap=args.gdd_cap)
+    weather_df["gdd"] = weather_df["gdd"].where(weather_df["doy"] >= args.planting_doy, 0.0)
+    weather_df["cum_gdd"] = weather_df["gdd"].cumsum()
+    season_precip = float(weather_df["PRECTOTCORR_in"].sum())
+    heat_days = int((weather_df["T2M_MAX"] > args.heat_stress_threshold).sum())
+    season_gdd = float(weather_df.loc[weather_df["doy"] >= args.planting_doy, "cum_gdd"].iloc[-1] if not weather_df[weather_df["doy"] >= args.planting_doy].empty else 0.0)
+
+    peak_ndvi = None
+    peak_doy = None
+    if not scenes_df.empty:
+        peak_idx = scenes_df["mean_ndvi"].idxmax()
+        peak_ndvi = float(scenes_df.loc[peak_idx, "mean_ndvi"])
+        peak_doy = int(scenes_df.loc[peak_idx, "doy"])
+
+    # Detect events
+    heavy_rain = _detect_heavy_rain(weather_df)
+    heat_waves = _detect_heat_waves(weather_df, threshold=args.heat_stress_threshold)
+    ndvi_dips = _detect_ndvi_dips(scenes_df)
+    ndvi_surges = _detect_ndvi_surge(scenes_df)
+    crop_captions = _build_crop_specific_captions(crop_name, [], weather_df, scenes_df)
+
+    # Growth window
+    if crop_name == "Soybeans":
+        repro_start, repro_end = 180, 250
+    elif crop_name == "Corn":
+        repro_start, repro_end = 190, 230
+    else:
+        repro_start, repro_end = 150, 250
+
+    scan_dates = []
+    if peak_doy:
+        scan_dates.append(peak_doy)
+    if heavy_rain:
+        scan_dates.append(heavy_rain[0]["doy"])
+
+    # Title text
+    title_lines = [f"<b>{year} Season — {crop_name}  |  Field: {field_slug}</b>"]
+    if quality:
+        qw = quality.get("weather", {})
+        qn = quality.get("ndvi", {})
+        qc = quality.get("cdl", {})
+        qw_badge = _format_quality_badge(qw.get("status", "unknown"))
+        qn_badge = _format_quality_badge(qn.get("status", "unknown"))
+        qc_badge = _format_quality_badge(qc.get("status", "unknown"))
+        quality_line = f"{qw_badge} Weather: {qw.get('actual_days', '?')}/{qw.get('expected_days', '?')} days ({qw.get('completeness_pct', 0):.0f}%)"
+        quality_line += f"  |  {qn_badge} NDVI: {qn.get('n_scenes', '?')} scenes"
+        quality_line += f"  |  {qc_badge} CDL: {qc.get('crop_name', '?')} {qc.get('dominance_pct', 0):.1f}%"
+        title_lines.append(quality_line)
+
+    stats_line = f"Peak NDVI: {peak_ndvi:.3f} on DOY {peak_doy}" if peak_ndvi else "Peak NDVI: N/A"
+    stats_line += f"  |  Precip: {season_precip:.1f} in"
+    stats_line += f"  |  Heat stress days (>{args.heat_stress_threshold}°F): {heat_days}"
+    stats_line += f"  |  Season GDD: {season_gdd:.0f} °F·day"
+    title_lines.append(stats_line)
+
+    callouts = []
+    if peak_doy:
+        pre_peak = weather_df[weather_df["doy"].between(peak_doy - 14, peak_doy)]
+        pre_peak_rain = pre_peak["PRECTOTCORR_in"].sum() if not pre_peak.empty else 0
+        if pre_peak_rain > 1.0:
+            callouts.append(f"NDVI peak DOY {peak_doy} follows {pre_peak_rain:.1f} in rain.")
+        else:
+            callouts.append(f"NDVI peak DOY {peak_doy} with limited pre-peak rain.")
+    if heat_waves:
+        hw = heat_waves[0]
+        callouts.append(f"Heat wave DOY {hw['start_doy']}-{hw['end_doy']} ({hw['length']} days >{args.heat_stress_threshold}°F).")
+    elif heat_days == 0:
+        callouts.append("No heat stress days — favorable temperature regime.")
+    if ref_stats and ref_stats.get("avg_final_gdd"):
+        ratio_gdd = season_gdd / ref_stats["avg_final_gdd"]
+        if ratio_gdd > 1.1:
+            callouts.append(f"Warm season: GDD {ratio_gdd:.0%} of 5-yr avg.")
+        elif ratio_gdd < 0.9:
+            callouts.append(f"Cool season: GDD {ratio_gdd:.0%} of 5-yr avg.")
+        else:
+            callouts.append("GDD near 5-yr average.")
+    for caption in crop_captions[:1]:
+        callouts.append(caption)
+    if ndvi_surges:
+        ns = ndvi_surges[0]
+        callouts.append(f"Rapid green-up DOY {ns['doy']}: +{ns['gain']:.2f} NDVI.")
+    title_lines.append("  |  ".join(callouts[:3]))
+
+    title_text = "<br>".join(title_lines)
+
+    # Create subplots
+    fig = make_subplots(
+        rows=4, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        subplot_titles=(
+            "Sentinel NDVI (CDL-masked mean)",
+            "Daily Precipitation",
+            "Temperature Extremes",
+            f"Cumulative GDD (base {args.gdd_base}°F, cap {args.gdd_cap}°F)",
+        ),
+    )
+
+    # --- Panel 1: NDVI ---
+    if not scenes_df.empty:
+        fig.add_trace(go.Scatter(
+            x=scenes_df["doy"], y=scenes_df["mean_ndvi"],
+            mode="markers", name="NDVI",
+            marker=dict(color="#0f766e", size=10, line=dict(color="white", width=1)),
+            hovertemplate="DOY %{x}<br>NDVI %{y:.3f}<extra></extra>",
+        ), row=1, col=1)
+
+        if len(scenes_df) >= 3:
+            smooth_y = _smooth_loess(scenes_df["doy"].values, scenes_df["mean_ndvi"].values)
+            fig.add_trace(go.Scatter(
+                x=scenes_df["doy"], y=smooth_y,
+                mode="lines", name="LOESS smooth",
+                line=dict(color="#0f766e", width=2),
+                hovertemplate="DOY %{x}<br>Smooth %{y:.3f}<extra></extra>",
+            ), row=1, col=1)
+
+        if peak_doy:
+            fig.add_vline(x=peak_doy, line=dict(color="#ea580c", dash="dash", width=1.5), row=1, col=1)
+            fig.add_annotation(
+                x=peak_doy, y=peak_ndvi,
+                text=f"Peak DOY {peak_doy}",
+                showarrow=True, arrowhead=2, arrowcolor="#ea580c",
+                font=dict(color="#ea580c", size=10),
+                row=1, col=1,
+            )
+
+        for surge in ndvi_surges:
+            fig.add_annotation(
+                x=surge["doy"], y=surge["to_ndvi"],
+                text=f"+{surge['gain']:.2f}",
+                showarrow=True, arrowhead=2, arrowcolor="#16a34a",
+                font=dict(color="#16a34a", size=9),
+                row=1, col=1,
+            )
+        for dip in ndvi_dips:
+            fig.add_annotation(
+                x=dip["doy"], y=dip["to_ndvi"],
+                text=f"-{dip['drop']:.2f}",
+                showarrow=True, arrowhead=2, arrowcolor="#dc2626",
+                font=dict(color="#dc2626", size=9),
+                ax=0, ay=30,
+                row=1, col=1,
+            )
+
+    # --- Panel 2: Precipitation ---
+    if not weather_df.empty:
+        fig.add_trace(go.Bar(
+            x=weather_df["doy"], y=weather_df["PRECTOTCORR_in"],
+            name="Precip", marker_color="#2563eb", opacity=0.6,
+            hovertemplate="DOY %{x}<br>%{y:.2f} in<extra></extra>",
+        ), row=2, col=1)
+
+        roll7 = weather_df.set_index("doy")["PRECTOTCORR_in"].rolling(7, min_periods=1).mean().reindex(range(60, 321), fill_value=0)
+        fig.add_trace(go.Scatter(
+            x=roll7.index, y=roll7.values,
+            mode="lines", name="7-day avg",
+            line=dict(color="#1e40af", width=1.5),
+            hovertemplate="DOY %{x}<br>7-day avg %{y:.2f} in<extra></extra>",
+        ), row=2, col=1)
+
+        for hr in heavy_rain[:2]:
+            fig.add_trace(go.Bar(
+                x=[hr["doy"]], y=[hr["amount_in"]],
+                name="Heavy rain", marker_color="#dc2626", opacity=0.8,
+                showlegend=False,
+                hovertemplate=f"DOY %{{x}}<br>{hr['amount_in']:.1f} in<extra></extra>",
+            ), row=2, col=1)
+
+    # --- Panel 3: Temperature ---
+    if not weather_df.empty:
+        tmin = weather_df.set_index("doy")["T2M_MIN"].reindex(range(60, 321))
+        tmax = weather_df.set_index("doy")["T2M_MAX"].reindex(range(60, 321))
+        tmean = weather_df.set_index("doy")["T2M"].reindex(range(60, 321))
+        doy_range = tmin.index.values
+
+        fig.add_trace(go.Scatter(
+            x=doy_range, y=tmax.values,
+            mode="lines", name="Tmax", line=dict(color="#fca5a5", width=0),
+            hovertemplate="DOY %{x}<br>Max %{y:.1f}°F<extra></extra>",
+            showlegend=False,
+        ), row=3, col=1)
+        fig.add_trace(go.Scatter(
+            x=doy_range, y=tmin.values,
+            mode="lines", name="Tmin fill", line=dict(color="#fca5a5", width=0),
+            fill="tonexty", fillcolor="rgba(252, 165, 165, 0.35)",
+            hovertemplate="DOY %{x}<br>Min %{y:.1f}°F<extra></extra>",
+            showlegend=False,
+        ), row=3, col=1)
+        fig.add_trace(go.Scatter(
+            x=doy_range, y=tmean.values,
+            mode="lines", name="Tmean",
+            line=dict(color="#dc2626", width=1.2),
+            hovertemplate="DOY %{x}<br>Mean %{y:.1f}°F<extra></extra>",
+        ), row=3, col=1)
+        fig.add_hline(
+            y=args.heat_stress_threshold, line=dict(color="#ea580c", dash="dash", width=1),
+            annotation_text=f"{args.heat_stress_threshold}°F stress", annotation_position="right",
+            row=3, col=1,
+        )
+
+        for hw in heat_waves:
+            fig.add_vrect(
+                x0=hw["start_doy"], x1=hw["end_doy"],
+                fillcolor="rgba(220, 38, 38, 0.15)", line_width=0,
+                row=3, col=1,
+            )
+
+    # --- Panel 4: GDD ---
+    if not weather_df.empty:
+        gdd_series = weather_df.set_index("doy")["cum_gdd"].reindex(range(60, 321))
+        fig.add_trace(go.Scatter(
+            x=gdd_series.index, y=gdd_series.values,
+            mode="lines", name=f"GDD {year}",
+            line=dict(color="#7c3aed", width=2.5),
+            hovertemplate="DOY %{x}<br>GDD %{y:.0f}<extra></extra>",
+        ), row=4, col=1)
+
+        if ref_stats and ref_stats.get("gdd_by_doy") is not None:
+            ref_gdd = ref_stats["gdd_by_doy"].reindex(range(60, 321), fill_value=0)
+            fig.add_trace(go.Scatter(
+                x=ref_gdd.index, y=ref_gdd.values,
+                mode="lines", name="5-yr avg",
+                line=dict(color="#a78bfa", width=1.5, dash="dash"),
+                hovertemplate="DOY %{x}<br>5-yr avg %{y:.0f}<extra></extra>",
+                visible=True,
+            ), row=4, col=1)
+
+        for m in [1000, 2000, 3000]:
+            crossing = gdd_series[gdd_series >= m]
+            if not crossing.empty:
+                cross_doy = int(crossing.index[0])
+                fig.add_hline(y=m, line=dict(color="#a78bfa", dash="dash", width=0.8), row=4, col=1)
+                fig.add_annotation(
+                    x=cross_doy, y=m + 50,
+                    text=f"{m} GDD", showarrow=False,
+                    font=dict(color="#7c3aed", size=9),
+                    row=4, col=1,
+                )
+
+    # --- Cross-panel elements ---
+    for sd in scan_dates:
+        for r in range(1, 5):
+            fig.add_vline(x=sd, line=dict(color="#94a3b8", dash="dot", width=1), row=r, col=1)
+
+    for r in range(1, 5):
+        fig.add_vrect(
+            x0=repro_start, x1=repro_end,
+            fillcolor="rgba(124, 58, 237, 0.06)", line_width=0,
+            row=r, col=1,
+        )
+
+    # --- Layout ---
+    fig.update_layout(
+        title=dict(text=title_text, font=dict(size=14), x=0.5, xanchor="center"),
+        height=1100,
+        hovermode="x unified",
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#fafaf9",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=60, r=40, t=140, b=60),
+    )
+
+    fig.update_xaxes(title_text="Day of Year", row=4, col=1, range=[args.planting_doy, 320])
+    fig.update_yaxes(title_text="NDVI", row=1, col=1, range=[-0.1, 1.0])
+    fig.update_yaxes(title_text="Precip (in)", row=2, col=1)
+    fig.update_yaxes(title_text="Temp (°F)", row=3, col=1)
+    fig.update_yaxes(title_text="Cumulative GDD", row=4, col=1)
+
+    # --- Updatemenus (buttons) ---
+    toggle_buttons = []
+    if ref_stats and ref_stats.get("gdd_by_doy") is not None:
+        toggle_buttons = [
+            dict(
+                label="Hide 5-yr avg",
+                method="update",
+                args=[{"visible": [True, True, True, True, True, True, True, True, True, False]},
+                      {"title": title_text}],
+            ),
+            dict(
+                label="Show 5-yr avg",
+                method="update",
+                args=[{"visible": [True, True, True, True, True, True, True, True, True, True]},
+                      {"title": title_text}],
+            ),
+        ]
+
+    generic_zoom = [
+        dict(label="Full Season", method="relayout", args=[{"xaxis.range": [60, 320]}]),
+        dict(label="Planting", method="relayout", args=[{"xaxis.range": [90, 120]}]),
+        dict(label="Vegetative", method="relayout", args=[{"xaxis.range": [100, 150]}]),
+        dict(label="Reproductive", method="relayout", args=[{"xaxis.range": [180, 250]}]),
+    ]
+
+    crop_zoom = []
+    if crop_name == "Soybeans":
+        crop_zoom = [
+            dict(label="VE-V3", method="relayout", args=[{"xaxis.range": [90, 130]}]),
+            dict(label="R1-R5", method="relayout", args=[{"xaxis.range": [180, 250]}]),
+        ]
+    elif crop_name == "Corn":
+        crop_zoom = [
+            dict(label="V6-VT", method="relayout", args=[{"xaxis.range": [120, 180]}]),
+            dict(label="VT/R1", method="relayout", args=[{"xaxis.range": [190, 210]}]),
+        ]
+
+    updatemenus = []
+    if toggle_buttons:
+        updatemenus.append(dict(
+            type="buttons", direction="right", x=0.1, y=1.12,
+            buttons=toggle_buttons, showactive=True,
+            pad=dict(r=10, t=10),
+            xanchor="left", yanchor="top",
+        ))
+
+    updatemenus.append(dict(
+        type="buttons", direction="right", x=0.5, y=1.12,
+        buttons=generic_zoom, showactive=False,
+        pad=dict(r=10, t=10),
+        xanchor="center", yanchor="top",
+    ))
+
+    if crop_zoom:
+        updatemenus.append(dict(
+            type="buttons", direction="right", x=0.9, y=1.12,
+            buttons=crop_zoom, showactive=False,
+            pad=dict(r=10, t=10),
+            xanchor="right", yanchor="top",
+        ))
+
+    fig.update_layout(updatemenus=updatemenus)
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def parse_args() -> argparse.Namespace:
@@ -1048,7 +1409,7 @@ def main() -> None:
         print(f"  Avg heat stress days: {ref_stats.get('avg_heat_stress_days'):.1f}")
         print(f"  Avg final GDD: {ref_stats.get('avg_final_gdd'):.0f}")
 
-    # Render
+    # Render static PNG
     fig = _render_dashboard(scenes_df, weather_df, ref_stats, crop_name, field, year, args, quality)
 
     if args.output_path:
@@ -1058,7 +1419,16 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=170, bbox_inches="tight", facecolor=fig.get_facecolor())
     plt.close(fig)
-    print(f"\nDashboard saved: {output_path}")
+    print(f"\nStatic PNG saved: {output_path}")
+
+    # Render interactive HTML
+    if _HAS_PLOTLY:
+        html_path = output_path.with_suffix(".html")
+        fig_html = _render_interactive_html(scenes_df, weather_df, ref_stats, crop_name, field, year, args, quality)
+        fig_html.write_html(str(html_path), include_plotlyjs="cdn", full_html=True)
+        print(f"Interactive HTML saved: {html_path}")
+    else:
+        print("Plotly not available; skipping HTML generation. Install with: pip install plotly")
 
 
 if __name__ == "__main__":
