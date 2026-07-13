@@ -40,34 +40,6 @@ All inputs come from the approved `data-pipeline` runtime area:
 | CDL raster | `shared/cdl/rasters/CDL_<year>_CONUS.tif` (or state variant) |
 | Field boundary | `growers/<g>/farms/<f>/fields/<field>/boundary/field_boundary.geojson` |
 
-## Requirements
-
-- Python 3.10+
-- `geopandas`, `rasterio`, `matplotlib`, `numpy`, `pandas`, `rasterstats`
-- `plotly` (optional, for interactive HTML dashboard)
-- A populated `data-pipeline` runtime with farm data (see data-pipeline README)
-
-## Quick start
-
-```bash
-export DATA_PIPELINE_DATA_ROOT=/path/to/my-farm-advisor-runtime
-
-cd my-farm-field-season-dashboard
-python scripts/generate_field_season_dashboard.py \
-  --grower-slug il-dekalb-grower \
-  --farm-slug dekalb-demo-farm \
-  --field-slug osm-1062497612 \
-  --year 2022 \
-  --state-fips 17
-```
-
-The script produces two outputs in the field's `derived/reports/` directory:
-
-```
-<field>_<year>_season_dashboard.png   # static matplotlib image
-<field>_<year>_season_dashboard.html  # interactive Plotly dashboard (requires plotly)
-```
-
 ## Example field-year
 
 The example below was generated for:
@@ -89,40 +61,7 @@ The example below was generated for:
 | 5-year reference | 2021, 2023, 2024, 2025 available for comparison |
 | Data cleanliness | No gaps, no errors in pipeline outputs |
 
-### Dashboard highlights
-
-- **Peak NDVI:** 0.604 on DOY 243 (late August — typical for soybeans)
-- **Season precipitation:** 28.7 inches
-- **Heat stress days:** 0.0 days (>/95°F)
-- **Season GDD:** 3,165 °F·day (from DOY 90 planting window)
-
-### Dashboard features
-
-**Cross-panel alignment:**
-- Vertical dotted lines at peak NDVI and major rain events span all 4 panels
-- Purple shading marks the reproductive growth window (R1-R5 for soybeans)
-
-**Panel 1 — NDVI:**
-- CDL-masked Sentinel mean with LOESS smoothing
-- Green arrows mark rapid green-up (+NDVI)
-- Red arrows mark NDVI dips
-- Peak annotated with DOY label
-
-**Panel 2 — Precipitation:**
-- Daily bars with 7-day rolling average
-- Heavy rain events (>1 inch) highlighted in red with amount labels
-
-**Panel 3 — Temperature:**
-- Min/max fill-between band with mean line
-- Heat wave periods shaded in red
-- 95°F threshold line for stress identification
-
-**Panel 4 — Cumulative GDD:**
-- Accumulated from planting window (default DOY 90)
-- 5-year average comparison (dashed line)
-- Milestone markers at 1,000 / 2,000 / 3,000 GDD
-
-> See `examples/osm-1062497612_2022_dashboard.png` for the example output.
+> See `examples/osm-1062497612_2022_dashboard.png` and `examples/osm-1062497612_2022_dashboard.html` for the example outputs.
 
 ## Assignment summary
 
@@ -151,51 +90,6 @@ All inputs come from the approved `data-pipeline` runtime area:
 | GDD (daily) | `max(0, min((Tmax+Tmin)/2, 86) - 50)` | °F·day |
 | Cumulative GDD | Sum from planting window (default DOY 90) | °F·day |
 
-### Dashboard output paths
-
-**Static PNG** (runtime):
-```
-growers/il-dekalb-grower/farms/dekalb-demo-farm/fields/osm-1062497612/derived/reports/osm-1062497612_2022_season_dashboard.png
-```
-
-**Interactive HTML** (runtime, requires `plotly`):
-```
-growers/il-dekalb-grower/farms/dekalb-demo-farm/fields/osm-1062497612/derived/reports/osm-1062497612_2022_season_dashboard.html
-```
-
-**Checked into skill examples:**
-```
-examples/osm-1062497612_2022_dashboard.png
-examples/osm-1062497612_2022_dashboard.html
-```
-
-### How to rerun
-
-```bash
-export DATA_PIPELINE_DATA_ROOT=/path/to/my-farm-advisor-runtime
-
-cd my-farm-field-season-dashboard
-python scripts/generate_field_season_dashboard.py \
-  --grower-slug il-dekalb-grower \
-  --farm-slug dekalb-demo-farm \
-  --field-slug osm-1062497612 \
-  --year 2022 \
-  --state-fips 17
-```
-
-Optional overrides for any field-year:
-```bash
-python scripts/generate_field_season_dashboard.py \
-  --grower-slug <grower> \
-  --farm-slug <farm> \
-  --field-slug <field> \
-  --year <year> \
-  --gdd-base 50 \
-  --gdd-cap 86 \
-  --heat-stress-threshold 95 \
-  --planting-doy 90
-```
-
 ### Known data limitations
 
 - **5-year reference stats** require historical weather and NDVI for the same field; if missing, the reference comparison degrades gracefully to a plain data summary
@@ -203,84 +97,3 @@ python scripts/generate_field_season_dashboard.py \
 - **Sentinel scene availability** varies by year and cloud cover; some years may have sparse NDVI coverage
 - **GDD accumulation** uses a fixed planting window (DOY 90) rather than actual planting date, which may misalign with true crop development
 - **Weather data** is from the NASA POWER reanalysis; it may not match on-station observations exactly
-
-## Annotations and callouts
-
-The dashboard includes a title block with:
-
-- Peak NDVI value and day-of-year
-- Total growing-season precipitation
-- Heat-stress day count (days > 95°F)
-- Final cumulative GDD
-
-### Data quality validation
-
-Before generating the dashboard, the script validates all three input sources:
-
-| Check | Rule | Status Thresholds |
-|-------|------|-------------------|
-| **Weather completeness** | Days present vs. expected (365/366) | [OK] ≥90% / [WARN] 80–90% / [FAIL] <80% |
-| **NDVI coverage** | Scenes across growing season phases | [OK] ≥5 scenes, ≥67% phase coverage / [WARN] 3–4 scenes / [FAIL] <3 scenes |
-| **CDL dominance** | Dominant crop percentage | [OK] ≥70% / [WARN] 50–70% / [FAIL] <50% |
-
-Quality badges appear in the dashboard title:
-```
-[OK] Weather: 365/365 days (100%)  |  [OK] NDVI: 9 scenes  |  [OK] CDL: Soybeans 72.4%
-```
-
-Gaps >3 days in weather data are reported in the console output.
-
-### Event detection
-
-The script automatically detects and highlights:
-
-| Event | Detection Rule | Visual Indicator |
-|-------|---------------|------------------|
-| **Heavy rain** | >1 inch in 24 hours | Red bars on precipitation panel |
-| **Heat waves** | 3+ consecutive days >95°F | Red shaded bands on temperature panel |
-| **Cool periods** | 7+ days with GDD <50% of rolling average | Reported in caption |
-| **NDVI surges** | Rapid green-up (>0.15 NDVI gain) | Green arrow annotations on NDVI panel |
-| **NDVI dips** | Sudden drop (>0.10 NDVI loss) | Red arrow annotations on NDVI panel |
-
-### Crop-specific interpretation
-
-Using corn/soybean strategy guide terminology:
-
-**For soybeans:**
-- Evaluates R1-R5 reproductive window conditions (DOY 180–250)
-- Flags heat stress during pod set and seed fill
-- Notes moisture adequacy during pod fill
-- Compares peak NDVI timing to typical soybean canopy
-
-**For corn:**
-- Evaluates VT/R1 pollination window (DOY 190–210)
-- Flags heat stress during kernel set
-- Notes moisture during R3 grain fill
-
-### Reference comparison
-
-When 5 years of historical data are available:
-
-- "Peak NDVI arrived ~X days later than the 5-yr avg"
-- "Drier-than-average season (Y% of 5-yr avg)"
-- "Above-normal heat stress (+Z days vs. 5-yr avg)"
-- "Cool season: final GDD W% of 5-yr avg"
-
-If reference data is missing, the callout degrades gracefully to a plain
-data summary.
-
-## Skill layout
-
-```
-my-farm-field-season-dashboard/
-├── SKILL.md              # Routing entrypoint
-├── README.md             # This file
-├── INDEX.md              # Agent navigation
-├── AGENTS.md             # Local operating rules
-├── PROVENANCE.md         # Source record
-├── scripts/
-│   └── generate_field_season_dashboard.py
-└── examples/
-    ├── osm-1062497612_2022_dashboard.png
-    └── osm-1062497612_2022_dashboard.html
-```
