@@ -730,16 +730,18 @@ def _render_dashboard(
         ax_ndvi.scatter(
             scenes_df["doy"], scenes_df["mean_ndvi"],
             color="#0f766e", s=55, zorder=3, edgecolors="white", linewidths=0.8,
+            label="Raw NDVI",
         )
         if len(scenes_df) >= 3:
             smooth_y = _smooth_loess(scenes_df["doy"].values, scenes_df["mean_ndvi"].values)
-            ax_ndvi.plot(scenes_df["doy"], smooth_y, color="#0f766e", linewidth=2.0, alpha=0.7, zorder=2)
+            ax_ndvi.plot(scenes_df["doy"], smooth_y, color="#0f766e", linewidth=2.0, alpha=0.7, zorder=2, label="LOESS smooth")
         if peak_doy:
             ax_ndvi.axvline(x=peak_doy, color="#ea580c", linestyle="--", alpha=0.6, zorder=1)
             ax_ndvi.text(
                 peak_doy + 2, 0.92, f"Peak\nDOY {peak_doy}",
                 fontsize=8, color="#ea580c", va="top",
             )
+        ax_ndvi.legend(loc="upper left", fontsize=8, framealpha=0.7)
         
         # Annotate NDVI surges and dips
         for surge in ndvi_surges:
@@ -792,19 +794,34 @@ def _render_dashboard(
     for sd in scan_dates:
         ax_precip.axvline(x=sd, color="#94a3b8", linestyle=":", alpha=0.4, zorder=0)
 
+    # Growing season window for heavy rain filtering
+    harvest_doy = 270 if crop_name == "Soybeans" else 280 if crop_name == "Corn" else 270
+    
     if not weather_df.empty:
-        ax_precip.bar(weather_df["doy"], weather_df["PRECTOTCORR_in"], color="#2563eb", alpha=0.6, width=0.8)
+        ax_precip.bar(weather_df["doy"], weather_df["PRECTOTCORR_in"], color="#2563eb", alpha=0.6, width=0.8, label="Daily precip")
         roll7 = weather_df.set_index("doy")["PRECTOTCORR_in"].rolling(7, min_periods=1).mean().reindex(range(60, 321), fill_value=0)
-        ax_precip.plot(roll7.index, roll7.values, color="#1e40af", linewidth=1.5, alpha=0.8)
+        ax_precip.plot(roll7.index, roll7.values, color="#1e40af", linewidth=1.5, alpha=0.8, label="7-day avg")
         
-        # Highlight heavy rain days
-        for hr in heavy_rain[:2]:  # Annotate top 2
-            ax_precip.bar(hr["doy"], hr["amount_in"], color="#dc2626", alpha=0.8, width=0.8, zorder=3)
+        # Highlight heavy rain days (only within growing season)
+        growing_season_rain = [hr for hr in heavy_rain if args.planting_doy <= hr["doy"] <= harvest_doy]
+        for i, hr in enumerate(growing_season_rain):
+            ax_precip.bar(hr["doy"], hr["amount_in"], color="#dc2626", alpha=0.8, width=0.8, zorder=3,
+                         label="Heavy rain (>1 in)" if i == 0 else "")
             ax_precip.text(
                 hr["doy"], hr["amount_in"] + 0.05,
                 f"{hr['amount_in']:.1f} in",
                 fontsize=7, color="#dc2626", ha="center", va="bottom",
             )
+        
+        # Harvest date line
+        ax_precip.axvline(x=harvest_doy, color="#78350f", linestyle="-.", alpha=0.5, linewidth=1.2)
+        ax_precip.text(
+            harvest_doy + 2, ax_precip.get_ylim()[1] * 0.95,
+            f"Harvest\nDOY {harvest_doy}",
+            fontsize=7, color="#78350f", ha="left", va="top",
+        )
+        
+        ax_precip.legend(loc="upper left", fontsize=8, framealpha=0.7)
     else:
         ax_precip.text(0.5, 0.5, "No weather data", ha="center", va="center",
                        transform=ax_precip.transAxes, color="#64748b", fontsize=10)
@@ -845,7 +862,7 @@ def _render_dashboard(
         doy_range = tmin.index.values
         ax_temp.fill_between(doy_range, tmin.values, tmax.values, color="#fca5a5", alpha=0.35, label="Min–Max")
         ax_temp.plot(doy_range, tmean.values, color="#dc2626", linewidth=1.2, label="Mean")
-        ax_temp.axhline(y=args.heat_stress_threshold, color="#ea580c", linestyle="--", alpha=0.5, linewidth=1.0)
+        ax_temp.axhline(y=args.heat_stress_threshold, color="#ea580c", linestyle="--", alpha=0.5, linewidth=1.0, label="Heat stress threshold")
         
         # Shade heat wave periods
         for hw in heat_waves:
