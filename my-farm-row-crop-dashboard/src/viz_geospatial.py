@@ -35,17 +35,15 @@ def render_field_map(boundaries: pd.DataFrame, soil_scores: pd.DataFrame,
 
     try:
         import geopandas as gpd
-        has_geometry = "geometry" in boundaries.columns and hasattr(boundaries, "geometry")
-        if not has_geometry:
+        is_gdf = isinstance(boundaries, gpd.GeoDataFrame)
+        has_geom_col = "geometry" in boundaries.columns
+        if not is_gdf and has_geom_col:
             try:
                 boundaries = gpd.GeoDataFrame(boundaries, geometry="geometry", crs="EPSG:4326")
             except Exception:
-                has_geometry = False
-
-        if has_geometry:
-            boundaries = boundaries.to_crs("EPSG:4326")
+                pass
     except ImportError:
-        has_geometry = False
+        pass
 
     fig = go.Figure()
 
@@ -87,16 +85,16 @@ def render_field_map(boundaries: pd.DataFrame, soil_scores: pd.DataFrame,
         elif status == "high_priority":
             size = 14
 
-        if has_geometry and hasattr(boundaries, "geometry"):
-            geom = row.geometry
-            if geom is not None:
-                try:
-                    centroid = geom.centroid
-                    centroids_x.append(centroid.x)
-                    centroids_y.append(centroid.y)
-                except Exception:
-                    continue
-            else:
+        try:
+            geom = row.geometry if hasattr(row, "geometry") else None
+        except Exception:
+            geom = None
+        if geom is not None:
+            try:
+                centroid = geom.centroid
+                centroids_x.append(centroid.x)
+                centroids_y.append(centroid.y)
+            except Exception:
                 continue
         else:
             centroids_x.append(-88.8 + np.random.uniform(-0.1, 0.1))
