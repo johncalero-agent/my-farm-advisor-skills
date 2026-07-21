@@ -154,7 +154,10 @@ def load_cdl_composition(grower_slug: str, farm_slug: str = "dekalb-demo-farm") 
 
     fallback = _sample_cdl_path()
     if fallback.exists():
-        return pd.read_csv(fallback)
+        df = pd.read_csv(fallback)
+        if "pct" not in df.columns:
+            df["pct"] = 100.0
+        return df
 
     return _generate_synthetic_cdl()
 
