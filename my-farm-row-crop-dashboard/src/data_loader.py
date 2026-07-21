@@ -60,6 +60,18 @@ def _sample_cdl_path() -> Path:
     return _SAMPLE_DIR / "soil" / "cdl-cropland" / "examples" / "sample_cdl_2_fields.csv"
 
 
+def _normalize_acres(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure boundaries have an 'acres' column."""
+    if "acres" not in df.columns:
+        if "area_acres" in df.columns:
+            df = df.copy()
+            df["acres"] = df["area_acres"]
+        elif "acreage" in df.columns:
+            df = df.copy()
+            df["acres"] = df["acreage"]
+    return df
+
+
 def load_field_boundaries(grower_slug: str, farm_slug: str = "dekalb-demo-farm") -> pd.DataFrame:
     runtime_path = _runtime_root() / "growers" / grower_slug / "farms" / farm_slug / "boundary" / "field_boundaries.geojson"
     if runtime_path.exists():
@@ -69,7 +81,7 @@ def load_field_boundaries(grower_slug: str, farm_slug: str = "dekalb-demo-farm")
             df = pd.DataFrame(gdf.drop(columns="geometry") if "geometry" in gdf.columns else gdf)
             if "geometry" in gdf.columns:
                 df["geometry"] = gdf["geometry"]
-            return df
+            return _normalize_acres(df)
         except Exception:
             pass
 
@@ -81,11 +93,11 @@ def load_field_boundaries(grower_slug: str, farm_slug: str = "dekalb-demo-farm")
             df = pd.DataFrame(gdf.drop(columns="geometry") if "geometry" in gdf.columns else gdf)
             if "geometry" in gdf.columns:
                 df["geometry"] = gdf["geometry"]
-            return df
+            return _normalize_acres(df)
         except Exception:
             pass
 
-    return _generate_synthetic_boundaries()
+    return _normalize_acres(_generate_synthetic_boundaries())
 
 
 def _generate_synthetic_boundaries() -> pd.DataFrame:
