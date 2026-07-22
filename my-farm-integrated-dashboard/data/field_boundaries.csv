@@ -1,0 +1,11 @@
+field_id,name,acres,lat,lon,state,county
+F1,North Quarter,1115,41.959,-88.795,IL,DeKalb
+F2,Creek Bottom,982,41.912,-88.83,IL,DeKalb
+F3,West Ridge,1140,41.915,-88.792,IL,DeKalb
+F4,East Flats,1386,41.942,-88.835,IL,DeKalb
+F5,South Bend,621,41.996,-88.76,IL,DeKalb
+F6,Timber Edge,859,42.056,-88.738,IL,DeKalb
+F7,Low Ground,934,41.9,-88.815,IL,DeKalb
+F8,Middle Forty,1252,41.935,-88.81,IL,DeKalb
+F9,Hill Field,1108,41.913,-88.842,IL,DeKalb
+F10,Back Section,1335,41.965,-88.77,IL,DeKalb

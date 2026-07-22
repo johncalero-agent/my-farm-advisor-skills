@@ -1,0 +1,11 @@
+field_id,score,tier,base_yield_corn_bu_ac,fixed_yield_corn_bu_ac,revenue_current_per_ac,revenue_fixed_per_ac,soy_yield_bu_ac,revenue_soy_per_ac,fix_cost_per_ac,payback_years,fix_details
+F4,99,excellent,190,195,1047,1075,60,780,0,0.0,No action needed
+F9,98,excellent,190,195,1044,1071,60,780,0,0.0,No action needed
+F5,97,excellent,189,194,1041,1068,60,780,0,0.0,No action needed
+F1,97,excellent,189,194,1041,1068,60,780,0,0.0,No action needed
+F6,92,excellent,186,191,1024,1052,60,780,0,0.0,No action needed
+F2,88,excellent,184,189,1011,1038,60,780,0,0.0,No action needed
+F3,71,good,174,179,955,982,60,780,0,0.0,Soil Quality: 71/100 (Good) | Drainage: Moderately well drained
+F8,63,watch,169,194,928,1066,60,774,130,0.9,Soil Quality: 63/100 (Watch) | Drainage: Somewhat poorly drained | Apply ag lime to raise subsoil pH | Install surface/mole drains
+F7,49,critical,160,185,882,1020,56,728,200,1.5,Soil Quality: 49/100 (Critical) | Drainage: Poorly drained | Apply ag lime to raise subsoil pH | Plant cover crop to build organic matter | Deep tillage or strip-till to reduce compaction | Install surface/mole drains
+F10,46,critical,159,184,872,1010,55,718,200,1.5,Soil Quality: 46/100 (Critical) | Drainage: Somewhat poorly drained | Apply ag lime to raise subsoil pH | Plant cover crop to build organic matter | Deep tillage or strip-till to reduce compaction | Install surface/mole drains

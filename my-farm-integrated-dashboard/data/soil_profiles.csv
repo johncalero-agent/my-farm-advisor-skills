@@ -1,0 +1,31 @@
+field_id,hzdept_r,hzdepb_r,om_r,ph1to1h2o_r,awc_r,dbthirdbar_r,claytotal_r,sandtotal_r,silttotal_r,drainagecl,muname,compname,comppct_r
+F1,0,15,4.7,6.8,0.19,1.32,28.6,8.9,62.5,Moderately well drained,Drummer silty clay loam,Drummer,50
+F1,15,30,4.9,6.7,0.2,1.34,27.0,10.5,62.5,Moderately well drained,Drummer silty clay loam,Drummer,50
+F1,30,60,4.4,6.8,0.19,1.4,28.9,13.8,57.3,Moderately well drained,Drummer silty clay loam,Drummer,50
+F2,0,15,2.4,6.0,0.18,1.34,25.3,13.6,61.1,Well drained,Ipava silt loam,Ipava,55
+F2,15,30,2.2,6.1,0.17,1.33,21.3,15.4,63.3,Well drained,Ipava silt loam,Ipava,55
+F2,30,60,2.3,5.9,0.18,1.41,31.9,12.6,55.5,Well drained,Ipava silt loam,Ipava,55
+F3,0,15,2.8,5.8,0.16,1.33,22.0,18.0,60.0,Moderately well drained,Elburn silt loam,Elburn,45
+F3,15,30,1.9,5.2,0.11,1.46,26.0,20.0,54.0,Moderately well drained,Elburn silt loam,Elburn,45
+F3,30,60,1.1,4.7,0.07,1.56,28.0,22.0,50.0,Moderately well drained,Elburn silt loam,Elburn,45
+F4,0,15,3.7,6.8,0.18,1.18,24.4,16.2,59.4,Well drained,Ipava silt loam,Ipava,50
+F4,15,30,3.4,6.7,0.17,1.21,28.1,17.2,54.7,Well drained,Ipava silt loam,Ipava,50
+F4,30,60,3.4,6.8,0.17,1.25,30.2,13.9,55.9,Well drained,Ipava silt loam,Ipava,50
+F5,0,15,3.4,6.6,0.17,1.19,28.5,7.4,64.1,Moderately well drained,Elburn silt loam,Elburn,45
+F5,15,30,3.2,6.6,0.17,1.23,28.7,8.6,62.7,Moderately well drained,Elburn silt loam,Elburn,45
+F5,30,60,3.1,6.5,0.16,1.27,27.5,9.2,63.3,Moderately well drained,Elburn silt loam,Elburn,45
+F6,0,15,3.2,5.9,0.17,1.27,29.6,22.7,47.7,Well drained,Sable silty clay loam,Sable,50
+F6,15,30,3.2,5.9,0.17,1.26,30.5,20.1,49.4,Well drained,Sable silty clay loam,Sable,50
+F6,30,60,3.3,5.8,0.18,1.28,32.6,18.8,48.6,Well drained,Sable silty clay loam,Sable,50
+F7,0,15,2.0,5.5,0.15,1.42,34.0,10.0,56.0,Poorly drained,Drummer silty clay loam,Drummer,50
+F7,15,30,1.0,4.8,0.08,1.58,40.0,12.0,48.0,Poorly drained,Drummer silty clay loam,Drummer,50
+F7,30,60,0.4,4.3,0.04,1.7,44.0,16.0,40.0,Poorly drained,Drummer silty clay loam,Drummer,50
+F8,0,15,2.6,5.8,0.14,1.4,28.0,16.0,56.0,Somewhat poorly drained,Ipava silt loam,Ipava,40
+F8,15,30,1.8,5.3,0.1,1.55,30.0,18.0,52.0,Somewhat poorly drained,Ipava silt loam,Ipava,40
+F8,30,60,1.0,4.8,0.07,1.62,34.0,20.0,46.0,Somewhat poorly drained,Ipava silt loam,Ipava,40
+F9,0,15,3.6,6.8,0.19,1.25,17.1,17.3,65.6,Moderately well drained,Drummer silty clay loam,Drummer,40
+F9,15,30,3.4,6.8,0.19,1.29,20.1,16.0,63.9,Moderately well drained,Drummer silty clay loam,Drummer,40
+F9,30,60,3.4,6.7,0.19,1.33,16.4,17.7,65.9,Moderately well drained,Drummer silty clay loam,Drummer,40
+F10,0,15,1.8,5.2,0.1,1.48,34.0,14.0,52.0,Somewhat poorly drained,Sable silty clay loam,Sable,55
+F10,15,30,0.9,4.4,0.05,1.64,38.0,18.0,44.0,Somewhat poorly drained,Sable silty clay loam,Sable,55
+F10,30,60,0.3,3.8,0.02,1.8,44.0,24.0,32.0,Somewhat poorly drained,Sable silty clay loam,Sable,55
