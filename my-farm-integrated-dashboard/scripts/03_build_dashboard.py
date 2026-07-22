@@ -58,26 +58,19 @@ def _serialize_soil(soil):
 
 def build_html(fields, soil, weather, ndvi, scores, actions):
     """Assemble the full HTML dashboard page."""
-    # Serialize all data as JSON for embedding
     scores_json = json.dumps(scores.to_dict("records"))
     actions_json = json.dumps(actions.to_dict("records"))
     soil_json = json.dumps(_serialize_soil(soil))
 
-    # Build weather JSON (compact)
     weather_records = []
     for _, row in weather.iterrows():
         weather_records.append({
-            "date": str(row["date"]),
-            "year": int(row["year"]),
-            "doy": int(row["doy"]),
-            "T2M": float(row["T2M"]),
-            "T2M_MAX": float(row["T2M_MAX"]),
-            "T2M_MIN": float(row["T2M_MIN"]),
-            "PRECTOTCORR": float(row["PRECTOTCORR"]),
+            "date": str(row["date"]), "year": int(row["year"]), "doy": int(row["doy"]),
+            "T2M": float(row["T2M"]), "T2M_MAX": float(row["T2M_MAX"]),
+            "T2M_MIN": float(row["T2M_MIN"]), "PRECTOTCORR": float(row["PRECTOTCORR"]),
         })
     weather_json = json.dumps(weather_records)
 
-    # Build NDVI JSON (grouped by field_id -> year -> values)
     ndvi_grouped = {}
     for (fid, yr), grp in ndvi.groupby(["field_id", "year"]):
         if fid not in ndvi_grouped:
@@ -85,56 +78,26 @@ def build_html(fields, soil, weather, ndvi, scores, actions):
         ndvi_grouped[fid][int(yr)] = [float(v) for v in grp.sort_values("doy")["ndvi"].tolist()]
     ndvi_json = json.dumps(ndvi_grouped)
 
-    # ── Narrative ──
-    n_good = int((scores["score"] >= 80).sum())
     n_crit = int((scores["score"] < 55).sum())
-    avg_score = int(round(scores["score"].mean()))
-    best = scores.iloc[0]
-    worst = scores.iloc[-1]
+    n_good = int((scores["score"] >= 80).sum())
     n_fields = len(fields)
     total_ac = int(fields["acres"].sum())
+    worst = scores.iloc[-1]
 
     narrative = (
-        f"<strong>{n_crit} {'field needs' if n_crit == 1 else 'fields need'} immediate action"
-        f" — {n_good} {'field is' if n_good == 1 else 'fields are'} ready for corn.</strong> "
-        f"Average Soil Quality Index across {n_fields} fields: <strong>{avg_score}/100</strong>. "
-        f"Best: {best['field_id']} ({best['name']}, {int(best['score'])}). "
-        f"Worst: {worst['field_id']} ({worst['name']}, {int(worst['score'])}). "
-        f"Select any field below to see detailed soil profiles, NDVI trends, and action options "
-        f"including crop-switching alternatives with honest payback periods."
+        f"{n_crit} {'field needs' if n_crit == 1 else 'fields need'} action — "
+        f"{n_good} {'field is' if n_good == 1 else 'fields are'} ready for corn."
     )
 
-    # ── Priority List ──
-    criticals = scores[scores["score"] < 55]
-    if len(criticals) == 0:
-        priority_html = '<h2>NEEDS ATTENTION</h2><p style="color:#10B981;font-size:12px">✅ No critical fields — all fields performing well.</p>'
-    else:
-        items = []
-        for _, s in criticals.head(3).iterrows():
-            act = actions[actions["field_id"] == s["field_id"]].iloc[0]
-            items.append(
-                f'<div class="priority-item">'
-                f'<span class="field-name" style="cursor:pointer;color:#EF4444" '
-                f'onclick="selectField(\'{s["field_id"]}\')">🔴 {s["field_id"]}</span> '
-                f'({s["name"]}, {int(s["score"])})<br>'
-                f'<span style="color:#64748b">{_first_detail(act["fix_details"])}</span>'
-                f'</div>'
-            )
-        priority_html = (
-            f'<h2>NEEDS ATTENTION ({len(criticals)} field{"s" if len(criticals) != 1 else ""})</h2>'
-            + "".join(items)
-        )
-
-    # ── Field Options ──
     field_options = "".join(
         f'<option value="{s["field_id"]}"{" selected" if i == 0 else ""}>'
-        f'{s["field_id"]} — {s["name"]} (Score: {int(s["score"])})</option>'
+        f'{s["field_id"]} — {s["name"]} (Score: {int(s["score"])} '
+        f'{"🟢" if s["score"] >= 80 else "🟡" if s["score"] >= 65 else "🟠" if s["score"] >= 55 else "🔴"})</option>'
         for i, (_, s) in enumerate(scores.iterrows())
     )
 
     default_fid = scores.iloc[0]["field_id"]
 
-    # ── Build HTML ──
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -144,111 +107,113 @@ def build_html(fields, soil, weather, ndvi, scores, actions):
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.4; font-size: 13px; }}
-.dashboard {{ max-width: 1400px; margin: 0 auto; padding: 12px 16px; height: 100vh; display: flex; flex-direction: column; }}
-.header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }}
-.header-left h1 {{ font-size: 20px; color: #166534; margin-bottom: 2px; }}
-.header-left .subtitle {{ font-size: 12px; color: #64748b; }}
-.narrative {{ font-size: 13px; color: #334155; max-width: 800px; padding: 6px 10px; background: #f0fdf4; border-left: 3px solid #10B981; border-radius: 4px; margin-bottom: 8px; }}
-.content {{ display: grid; grid-template-columns: 1fr 280px; gap: 10px; flex: 1; min-height: 0; }}
-.left-panel {{ display: flex; flex-direction: column; gap: 8px; min-height: 0; }}
-.rankings {{ background: white; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }}
-.rankings h2 {{ font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 8px; }}
-.rank-row {{ display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; border-radius: 4px; transition: background 0.15s; }}
-.rank-row:hover {{ background: #f1f5f9; }}
-.rank-row.selected {{ background: #dbeafe; }}
-.rank-bar-bg {{ flex: 1; height: 18px; background: #f1f5f9; border-radius: 3px; position: relative; overflow: hidden; }}
-.rank-bar-fill {{ height: 100%; border-radius: 3px; transition: width 0.3s; }}
-.rank-label {{ font-weight: 600; font-size: 12px; width: 24px; }}
-.rank-score {{ font-size: 12px; font-weight: 700; width: 28px; text-align: right; }}
-.rank-ndvi {{ font-size: 10px; color: #64748b; width: 90px; }}
-.rank-flag {{ font-size: 10px; width: 100px; }}
-.rank-sub {{ display: flex; gap: 2px; align-items: center; font-size: 9px; color: #94a3b8; }}
-.rank-sub-bar {{ width: 3px; border-radius: 1px; }}
-.right-panel {{ display: flex; flex-direction: column; gap: 8px; }}
-.priority {{ background: white; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }}
-.priority h2 {{ font-size: 14px; font-weight: 600; color: #EF4444; margin-bottom: 8px; }}
-.priority-item {{ padding: 6px 0; border-bottom: 1px solid #f1f5f9; font-size: 12px; }}
-.priority-item:last-child {{ border-bottom: none; }}
-.priority-item .field-name {{ font-weight: 600; }}
-.detail {{ background: white; border-radius: 8px; padding: 10px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }}
-.detail-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }}
-.detail-header h2 {{ font-size: 14px; font-weight: 600; }}
-.detail-header select {{ font-size: 12px; padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; }}
-.detail-grid {{ display: grid; grid-template-columns: 1.8fr 1fr; gap: 10px; margin-bottom: 8px; }}
-.map-panel {{ aspect-ratio: 1.2; border: 1px solid #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; flex-direction: column; gap: 6px; }}
-.profile-panel {{ display: flex; flex-direction: column; gap: 3px; font-size: 11px; }}
+.dashboard {{ max-width: 1500px; margin: 0 auto; padding: 10px 14px; height: 100vh; display: flex; flex-direction: column; }}
+.header {{ display: flex; justify-content: space-between; align-items: baseline; gap: 16px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }}
+.header h1 {{ font-size: 18px; color: #166534; white-space: nowrap; }}
+.header .summary {{ font-size: 12px; color: #475569; font-weight: 600; }}
+.header .meta {{ font-size: 11px; color: #94a3b8; white-space: nowrap; }}
+.field-picker {{ display: flex; align-items: center; gap: 8px; padding: 8px 0 6px; }}
+.field-picker label {{ font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; }}
+.field-picker select {{ font-size: 13px; padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: white; font-weight: 600; min-width: 300px; }}
+.field-picker .nav-btn {{ padding: 4px 10px; border: 1px solid #d1d5db; background: white; border-radius: 4px; cursor: pointer; font-size: 12px; }}
+.field-picker .nav-btn:hover {{ background: #f1f5f9; }}
+.detail-grid {{ display: grid; grid-template-columns: 2.5fr 1fr; gap: 12px; flex: 1; min-height: 0; }}
+.map-section {{ background: white; border-radius: 8px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; min-height: 0; }}
+.map-container {{ flex: 1; position: relative; }}
+.right-side {{ display: flex; flex-direction: column; gap: 8px; min-height: 0; }}
+.profile-panel {{ background: white; border-radius: 8px; padding: 8px 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 11px; }}
 .profile-panel h3 {{ font-size: 12px; font-weight: 600; color: #334155; margin-bottom: 4px; }}
-.profile-row {{ display: grid; grid-template-columns: 44px 1fr 36px 28px; gap: 3px; align-items: center; padding: 1px 0; }}
-.profile-bar-bg {{ background: #f1f5f9; border-radius: 2px; height: 12px; position: relative; overflow: hidden; }}
+.profile-row {{ display: grid; grid-template-columns: 36px 1fr 32px 24px; gap: 2px; align-items: center; padding: 1px 0; }}
+.profile-bar-bg {{ background: #f1f5f9; border-radius: 2px; height: 10px; overflow: hidden; }}
 .profile-bar-fill {{ height: 100%; border-radius: 2px; }}
-.profile-status {{ font-size: 10px; font-weight: 600; text-align: center; padding: 1px 3px; border-radius: 3px; }}
+.profile-status {{ font-size: 9px; font-weight: 600; text-align: center; padding: 1px 2px; border-radius: 2px; }}
 .status-ok {{ background: #dcfce7; color: #166534; }}
 .status-warn {{ background: #fef9c3; color: #854d0e; }}
 .status-bad {{ background: #fee2e2; color: #991b1b; }}
-.ndvi-alert {{ padding: 6px 10px; border-radius: 4px; font-size: 11px; margin-bottom: 8px; }}
-.ndvi-alert.danger {{ background: #fef2f2; border-left: 3px solid #EF4444; }}
-.ndvi-alert.ok {{ background: #f0fdf4; border-left: 3px solid #10B981; }}
-.ndvi-alert.warn {{ background: #fffbeb; border-left: 3px solid #F59E0B; }}
-.options {{ display: flex; flex-direction: column; gap: 6px; }}
-.option-card {{ border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; }}
-.option-card h4 {{ font-size: 12px; margin-bottom: 4px; }}
-.option-card ul {{ list-style: none; font-size: 11px; color: #475569; }}
+.ndvi-line {{ display: flex; align-items: center; gap: 4px; font-size: 10px; padding: 2px 0; }}
+.field-aside {{ display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }}
+.options {{ display: flex; flex-direction: column; gap: 5px; overflow-y: auto; flex: 1; }}
+.option-card {{ border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 8px; font-size: 11px; }}
+.option-card h4 {{ font-size: 11px; margin-bottom: 3px; }}
+.option-card ul {{ list-style: none; color: #475569; }}
 .option-card ul li {{ padding: 1px 0; }}
 .option-card ul li::before {{ content: "├── "; color: #94a3b8; }}
-.rec {{ font-size: 11px; padding: 6px 10px; background: #eff6ff; border-radius: 4px; border-left: 3px solid #3b82f6; margin-top: 6px; }}
-.weather {{ background: white; border-radius: 8px; padding: 8px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 16px; }}
-.weather h2 {{ font-size: 13px; font-weight: 600; white-space: nowrap; }}
-.weather select {{ font-size: 12px; padding: 3px 6px; border: 1px solid #d1d5db; border-radius: 4px; background: white; }}
-.weather-chart {{ flex: 1; height: 50px; }}
-.weather-metric {{ font-size: 11px; text-align: center; flex: 1; }}
-.weather-metric .value {{ font-weight: 700; font-size: 14px; }}
-.weather-metric .label {{ color: #64748b; font-size: 10px; }}
+.rec {{ font-size: 10px; padding: 4px 8px; background: #eff6ff; border-radius: 4px; border-left: 3px solid #3b82f6; }}
+.bottom-section {{ display: flex; flex-direction: column; gap: 6px; }}
+.rankings-bar {{ background: white; border-radius: 6px; padding: 6px 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); overflow: hidden; }}
+.rankings-bar summary {{ font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; padding: 2px 0; }}
+.rankings-bar summary::marker {{ font-size: 10px; }}
+.ranks-inner {{ display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px 12px; padding-top: 6px; }}
+.rank-compact {{ display: flex; align-items: center; gap: 4px; padding: 2px 4px; cursor: pointer; border-radius: 4px; font-size: 11px; }}
+.rank-compact:hover {{ background: #f1f5f9; }}
+.rank-compact .rname {{ font-weight: 600; min-width: 22px; }}
+.rank-compact .rbar {{ flex: 1; height: 10px; background: #f1f5f9; border-radius: 2px; overflow: hidden; }}
+.rank-compact .rfill {{ height: 100%; border-radius: 2px; }}
+.rank-compact .rscore {{ font-weight: 700; font-size: 10px; min-width: 22px; text-align: right; }}
+.rank-compact .rndvi {{ width: 55px; height: 10px; }}
+.weather-section {{ background: white; border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }}
+.weather-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }}
+.weather-header h3 {{ font-size: 13px; font-weight: 600; color: #334155; }}
+.weather-header select {{ font-size: 12px; padding: 3px 8px; border: 1px solid #d1d5db; border-radius: 4px; background: white; }}
+.weather-table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+.weather-table th {{ text-align: left; font-weight: 600; color: #64748b; padding: 3px 6px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }}
+.weather-table td {{ padding: 3px 6px; border-bottom: 1px solid #f1f5f9; }}
+.weather-table tr.total {{ font-weight: 700; border-top: 2px solid #e2e8f0; }}
+.weather-table .evt {{ color: #EF4444; font-weight: 600; }}
+.weather-table .evt-none {{ color: #94a3b8; }}
+.weather-annual {{ display: flex; gap: 16px; padding-top: 6px; font-size: 11px; color: #475569; border-top: 1px solid #e2e8f0; margin-top: 4px; }}
+.weather-annual strong {{ color: #1e293b; }}
 </style>
 </head>
 <body>
 <div class="dashboard">
   <div class="header">
-    <div class="header-left">
+    <div style="display:flex;align-items:baseline;gap:12px">
       <h1>🌽 Corn Soil Dashboard</h1>
-      <div class="subtitle">DeKalb County, IL · {n_fields} fields · {total_ac:,} acres · Soil Quality Index (0–100)</div>
+      <span class="summary">{narrative}</span>
+    </div>
+    <div class="meta">DeKalb County, IL · {n_fields} fields · {total_ac:,} acres · Soil Quality Index (0-100)</div>
+  </div>
+
+  <div class="field-picker">
+    <label>FIELD:</label>
+    <select id="field-selector">{field_options}</select>
+    <button class="nav-btn" onclick="navField(-1)">◀ Prev</button>
+    <button class="nav-btn" onclick="navField(1)">Next ▶</button>
+  </div>
+
+  <div class="detail-grid">
+    <div class="map-section">
+      <div class="map-container" id="map-container"></div>
+    </div>
+    <div class="right-side">
+      <div class="profile-panel" id="profile-panel">
+        <h3>Soil Profile by Depth</h3>
+        <div id="profile-content"></div>
+      </div>
+      <div class="field-aside">
+        <div id="ndvi-alert"></div>
+        <div class="options" id="options-panel"></div>
+        <div id="rec-section"></div>
+      </div>
     </div>
   </div>
 
-  <div class="narrative">{narrative}</div>
-
-  <div class="content">
-    <div class="left-panel">
-      <div class="rankings">
-        <h2>FIELD RANKINGS (best → worst)</h2>
-        <div id="rankings-container"></div>
+  <div class="bottom-section">
+    <details class="rankings-bar" open>
+      <summary>ALL FIELDS (best → worst)</summary>
+      <div class="ranks-inner" id="ranks-grid"></div>
+    </details>
+    <div class="weather-section" id="weather-section">
+      <div class="weather-header">
+        <h3>WEATHER TABLE</h3>
+        <select id="year-selector">
+          <option value="2025" selected>2025</option><option value="2024">2024</option>
+          <option value="2023">2023</option><option value="2022">2022</option><option value="2021">2021</option>
+        </select>
       </div>
-
-      <div class="detail" id="detail-section">
-        <div class="detail-header">
-          <h2 id="detail-title">FIELD DETAIL</h2>
-          <select id="field-selector">{field_options}</select>
-        </div>
-        <div id="detail-content">Select a field above to see details.</div>
-      </div>
+      <div id="weather-table"></div>
     </div>
-
-    <div class="right-panel">
-      <div class="priority" id="priority-section">
-        {priority_html}
-      </div>
-    </div>
-  </div>
-
-  <div class="weather">
-    <h2>WEATHER</h2>
-    <select id="year-selector">
-      <option value="2025" selected>2025</option>
-      <option value="2024">2024</option>
-      <option value="2023">2023</option>
-      <option value="2022">2022</option>
-      <option value="2021">2021</option>
-    </select>
-    <div id="weather-panel" class="weather-chart"></div>
   </div>
 </div>
 
@@ -260,290 +225,283 @@ const WEATHER = {weather_json};
 const NDVI = {ndvi_json};
 const ACTIONS = {actions_json};
 const SOIL = {soil_json};
+const MM_TO_IN = 1.0 / 25.4;
 
 let selectedField = "{default_fid}";
 let selectedYear = 2025;
 
-// ── Rankings ──
+// ── Rankings Grid ──
 function renderRankings() {{
-  const container = document.getElementById("rankings-container");
+  const grid = document.getElementById("ranks-grid");
   const rows = SCORES.map(s => {{
     const pct = s.score;
+    const color = pct >= 80 ? '#10B981' : pct >= 55 ? '#F59E0B' : '#EF4444';
     const ndviData = NDVI[s.field_id]?.[selectedYear] || [];
-    const ndviMean = ndviData.length ? (ndviData.reduce((a,b) => a+b,0) / ndviData.length).toFixed(3) : null;
-    let color = pct >= 80 ? '#10B981' : pct >= 55 ? '#F59E0B' : '#EF4444';
-    let tierIcon = pct >= 80 ? '🟢' : pct >= 65 ? '🟡' : pct >= 55 ? '🟠' : '🔴';
-
-    let flag = "";
-    if (!ndviMean) flag = "";
-    else if (pct < 55 && parseFloat(ndviMean) < 0.65) flag = "⚠️ Soil+NDVI low";
-    else if (pct >= 80 && parseFloat(ndviMean) >= 0.72) flag = "✅";
-    else if (pct >= 80) flag = "⚠️ NDVI low";
-
-    const sel = s.field_id === selectedField ? " selected" : "";
-    const topPct = s.topsoil_score || 0;
-    const subPct = s.subsoil_score || 0;
-
-    return `<div class="rank-row${{sel}}" onclick="selectField('${{s.field_id}}')">
-      <span class="rank-label">${{s.field_id}}</span>
-      <div class="rank-bar-bg">
-        <div class="rank-bar-fill" style="width:${{pct}}%;background:${{color}}"></div>
-      </div>
-      <span class="rank-score" style="color:${{color}}">${{pct}}</span>
-      <span class="rank-ndvi" data-fid="${{s.field_id}}">—</span>
-      <span class="rank-flag">${{flag}}</span>
-      <span class="rank-sub" title="Topsoil / Subsoil score">
-        T:<span class="rank-sub-bar" style="background:${{topPct >= 65 ? '#10B981' : '#EF4444'}};height:${{Math.max(2, topPct/10)}}px"></span>
-        S:<span class="rank-sub-bar" style="background:${{subPct >= 50 ? '#10B981' : '#EF4444'}};height:${{Math.max(2, subPct/10)}}px"></span>
-      </span>
+    const sel = s.field_id === selectedField ? ' style="outline:2px solid #3b82f6;outline-offset:1px"' : '';
+    return `<div class="rank-compact"${{sel}} onclick="selectField('${{s.field_id}}')">
+      <span class="rname">${{s.field_id}}</span>
+      <div class="rbar"><div class="rfill" style="width:${{pct}}%;background:${{color}}"></div></div>
+      <span class="rscore" style="color:${{color}}">${{pct}}</span>
+      <span class="rndvi" data-fid="${{s.field_id}}"></span>
     </div>`;
   }}).join('');
-  container.innerHTML = rows;
-
-  // Render NDVI sparklines
-  container.querySelectorAll('.rank-ndvi').forEach(el => {{
+  grid.innerHTML = rows;
+  grid.querySelectorAll('.rndvi').forEach(el => {{
     const fid = el.dataset.fid;
     const ndviData = NDVI[fid]?.[selectedYear] || [];
     if (ndviData.length) {{
-      const svg = sparklineSVG(ndviData, 85, 14);
-      el.innerHTML = '';
-      el.appendChild(svg);
-    }} else {{
-      el.textContent = 'no data';
+      const svg = sparkSmall(ndviData, 55, 10);
+      el.innerHTML = ''; el.appendChild(svg);
     }}
   }});
 }}
 
-function sparklineSVG(vals, w, h) {{
+function sparkSmall(vals, w, h) {{
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", w); svg.setAttribute("height", h);
-  svg.setAttribute("viewBox", `0 0 ${{vals.length - 1}} 1`);
+  svg.setAttribute("viewBox", `0 0 ${{vals.length-1}} 1`);
   svg.style.overflow = "visible";
-  const pts = vals.map((v, i) => `${{i}},${{1 - v}}`).join(' ');
+  const pts = vals.map((v,i) => `${{i}},${{1-v}}`).join(' ');
   const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
   pl.setAttribute("points", pts); pl.setAttribute("fill", "none");
-  pl.setAttribute("stroke", "#6366f1"); pl.setAttribute("stroke-width", "0.06");
+  pl.setAttribute("stroke", "#818cf8"); pl.setAttribute("stroke-width", "0.08");
   pl.setAttribute("vector-effect", "non-scaling-stroke");
   svg.appendChild(pl);
   return svg;
 }}
 
-// ── Field selector ──
-window.selectField = function(fid) {{
-  selectedField = fid;
-  document.getElementById("field-selector").value = fid;
-  renderRankings();
-  renderDetail();
-}};
-document.getElementById("field-selector").addEventListener("change", (e) => {{
-  window.selectField(e.target.value);
-}});
-
-// ── Detail Section ──
-function fieldMapSvg(fid, score, acres, name) {{
-  const cx = 160, cy = 140;
-  const size = 80 + (acres - 620) * 0.05;
+// ── Map ──
+function renderMap() {{
+  const field = SCORES.find(s => s.field_id === selectedField);
+  if (!field) return;
+  const score = field.score;
+  const acres = field.acres;
+  const name = field.name;
   const color = score >= 80 ? '#10B981' : score >= 55 ? '#F59E0B' : '#EF4444';
-  const opacity = 0.35 + score * 0.006;
-  const pts = [
-    [cx - size*0.6, cy - size*0.5], [cx + size*0.5, cy - size*0.55],
-    [cx + size*0.7, cy], [cx + size*0.4, cy + size*0.5],
-    [cx - size*0.3, cy + size*0.6], [cx - size*0.7, cy + size*0.1]
-  ];
-  const d = pts.map((p,i) => `${{i===0?'M':'L'}} ${{p[0]}} ${{p[1]}}`).join(' ')+' Z';
-  return `<svg width="320" height="280" viewBox="0 0 320 280">
-    <rect width="320" height="280" fill="#f8fafc"/>
-    <path d="${{d}}" fill="${{color}}" fill-opacity="${{opacity}}" stroke="${{color}}" stroke-width="2"/>
-    <text x="160" y="20" text-anchor="middle" font-size="9" fill="#94a3b8">${{name}} — ${{acres}} acres</text>
-    <text x="160" y="${{cy - 15}}" text-anchor="middle" font-size="11" font-weight="700" fill="${{color}}">Soil Quality: ${{score}}/100</text>
-    <text x="160" y="${{cy + 5}}" text-anchor="middle" font-size="9" fill="#94a3b8">Corn suitability ${{score >= 80 ? 'Excellent' : score >= 55 ? 'Needs attention' : 'Critical'}}</text>
+  const opacity = 0.4 + score * 0.005;
+  const w = 600, h = 340, cx = w/2, cy = h/2, sz = 90 + (acres - 620) * 0.06;
+
+  // Simple 6-point polygon
+  const pts = [[cx-sz*0.55,cy-sz*0.45],[cx+sz*0.45,cy-sz*0.5],[cx+sz*0.65,cy],[cx+sz*0.35,cy+sz*0.48],[cx-sz*0.28,cy+sz*0.55],[cx-sz*0.65,cy+sz*0.08]];
+  const d = pts.map((p,i)=>`${{i===0?'M':'L'}} ${{p[0].toFixed(0)}} ${{p[1].toFixed(0)}}`).join(' ')+' Z';
+
+  // Grid lines
+  let grid = '';
+  for (let x = 0; x <= w; x += 100) grid += `<line x1="${{x}}" y1="0" x2="${{x}}" y2="${{h}}" stroke="#e2e8f0" stroke-width="0.5"/>`;
+  for (let y = 0; y <= h; y += 100) grid += `<line x1="0" y1="${{y}}" x2="${{w}}" y2="${{y}}" stroke="#e2e8f0" stroke-width="0.5"/>`;
+
+  // Scale bar
+  const scaleX = w - 90, scaleY = h - 30;
+
+  const svg = document.getElementById("map-container");
+  svg.innerHTML = `<svg width="${{w}}" height="${{h}}" viewBox="0 0 ${{w}} ${{h}}" style="width:100%;height:100%">
+    <rect width="${{w}}" height="${{h}}" fill="#dcfce7"/>
+    ${{grid}}
+    <path d="${{d}}" fill="${{color}}" fill-opacity="${{opacity}}" stroke="${{color}}" stroke-width="2.5"/>
+    <text x="${{cx}}" y="${{cy-25}}" text-anchor="middle" font-size="10" fill="#475569" font-weight="600">${{name}}</text>
+    <text x="${{cx}}" y="${{cy-8}}" text-anchor="middle" font-size="9" fill="#64748b">${{acres}} acres · Soil Quality: ${{score}}/100</text>
+    <text x="${{cx}}" y="${{cy+8}}" text-anchor="middle" font-size="9" fill="${{color}}" font-weight="600">${{score>=80?'🟢 Excellent':score>=65?'🟡 Good':score>=55?'🟠 Needs attention':'🔴 Critical'}}</text>
+    <line x1="${{scaleX}}" y1="${{scaleY}}" x2="${{scaleX-60}}" y2="${{scaleY}}" stroke="#94a3b8" stroke-width="1.5"/>
+    <line x1="${{scaleX}}" y1="${{scaleY-4}}" x2="${{scaleX}}" y2="${{scaleY+4}}" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="${{scaleX-60}}" y1="${{scaleY-4}}" x2="${{scaleX-60}}" y2="${{scaleY+4}}" stroke="#94a3b8" stroke-width="1"/>
+    <text x="${{scaleX-30}}" y="${{scaleY-5}}" text-anchor="middle" font-size="7" fill="#94a3b8">~1,000 ft</text>
+    <text x="15" y="18" font-size="8" fill="#94a3b8">N</text>
+    <polygon points="15,14 12,20 18,20" fill="#94a3b8"/>
   </svg>`;
 }}
 
-function renderDetail() {{
+// ── Field Navigation ──
+window.navField = function(dir) {{
+  const idx = SCORES.findIndex(s => s.field_id === selectedField);
+  const nextIdx = (idx + dir + SCORES.length) % SCORES.length;
+  window.selectField(SCORES[nextIdx].field_id);
+}};
+
+// ── Selector ──
+window.selectField = function(fid) {{
+  selectedField = fid;
+  document.getElementById("field-selector").value = fid;
+  renderMap(); renderProfile(); renderOptions(); renderRankings();
+}};
+document.getElementById("field-selector").addEventListener("change", (e) => window.selectField(e.target.value));
+
+// ── Profile ──
+function renderProfile() {{
+  const field = SCORES.find(s => s.field_id === selectedField);
+  if (!field) return;
+  const soilData = SOIL[field.field_id];
+  if (!soilData || !soilData.layers) return;
+  const dl = ['0–6"', '6–12"', '12–24"'];
+  let h = '';
+  soilData.layers.forEach((l, i) => {{
+    const omS = l.om_r >= 3.0 ? 'ok' : l.om_r >= 2.0 ? 'warn' : 'bad';
+    const phS = (l.ph1to1h2o_r >= 6.0 && l.ph1to1h2o_r <= 7.0) ? 'ok' : (l.ph1to1h2o_r >= 5.5) ? 'warn' : 'bad';
+    const awcS = l.awc_r >= 0.15 ? 'ok' : l.awc_r >= 0.10 ? 'warn' : 'bad';
+    const omPct = Math.min(100, Math.round(l.om_r / 5.0 * 100));
+    const phPct = Math.min(100, Math.round(l.ph1to1h2o_r / 8.0 * 100));
+    const awcPct = Math.min(100, Math.round(l.awc_r / 0.25 * 100));
+    h += `<div style="font-size:9px;font-weight:600;color:#94a3b8;margin-top:3px">${{dl[i]}}</div>`;
+    h += `<div class="profile-row"><span>OM</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{omPct}}%;background:#${{omS==='ok'?'10B981':omS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.om_r}}%</span><span class="profile-status status-${{omS}}">${{omS==='ok'?'+':omS==='warn'?'~':'−'}}</span></div>`;
+    h += `<div class="profile-row"><span>pH</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{phPct}}%;background:#${{phS==='ok'?'10B981':phS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.ph1to1h2o_r}}</span><span class="profile-status status-${{phS}}">${{phS==='ok'?'+':phS==='warn'?'~':'−'}}</span></div>`;
+    h += `<div class="profile-row"><span>AWC</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{awcPct}}%;background:#${{awcS==='ok'?'10B981':awcS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.awc_r}}</span><span class="profile-status status-${{awcS}}">${{awcS==='ok'?'+':awcS==='warn'?'~':'−'}}</span></div>`;
+  }});
+  h += '<div style="font-size:8px;color:#94a3b8;margin-top:3px">+ optimal ~ borderline − needs fix</div>';
+  document.getElementById("profile-content").innerHTML = h;
+}}
+
+// ── NDVI Alert ──
+function getNdviAlert(field, ndviMean, isGood) {{
+  if (!ndviMean) return '';
+  if (!isGood && parseFloat(ndviMean) < 0.65)
+    return '<div style="padding:4px 6px;background:#fef2f2;border-left:3px solid #EF4444;border-radius:4px;font-size:10px;margin-bottom:4px">⚠️ Soil score AND NDVI both low — soil likely limiting plant vigor</div>';
+  if (isGood && parseFloat(ndviMean) >= 0.72)
+    return '<div style="padding:4px 6px;background:#f0fdf4;border-left:3px solid #10B981;border-radius:4px;font-size:10px;margin-bottom:4px">✅ Soil and NDVI both in good range</div>';
+  if (isGood)
+    return '<div style="padding:4px 6px;background:#fffbeb;border-left:3px solid #F59E0B;border-radius:4px;font-size:10px;margin-bottom:4px">⚠️ Good soil but low NDVI — check weather or management</div>';
+  return '';
+}}
+
+// ── Options ──
+function renderOptions() {{
   const field = SCORES.find(s => s.field_id === selectedField);
   if (!field) return;
   const action = ACTIONS.find(a => a.field_id === selectedField) || {{}};
-  const soilData = SOIL[field.field_id];
   const ndviData = NDVI[field.field_id]?.[selectedYear] || [];
   const ndviMean = ndviData.length ? (ndviData.reduce((a,b) => a+b,0) / ndviData.length).toFixed(3) : null;
   const isGood = field.score >= 80;
-  const ndviLow = ndviMean && parseFloat(ndviMean) < 0.65;
 
-  const mapSvg = fieldMapSvg(field.field_id, field.score, field.acres, field.name);
+  document.getElementById("ndvi-alert").innerHTML = getNdviAlert(field, ndviMean, isGood);
 
-  // Soil profile
-  let profileHtml = '';
-  if (soilData && soilData.layers) {{
-    const depthLabels = ['0-6"', '6-12"', '12-24"'];
-    soilData.layers.forEach((l, i) => {{
-      const omPct = Math.min(100, Math.round(l.om_r / 5.0 * 100));
-      const phPct = Math.min(100, Math.round(l.ph1to1h2o_r / 8.0 * 100));
-      const awcPct = Math.min(100, Math.round(l.awc_r / 0.25 * 100));
-      const omS = l.om_r >= 3.0 ? 'ok' : l.om_r >= 2.0 ? 'warn' : 'bad';
-      const phS = (l.ph1to1h2o_r >= 6.0 && l.ph1to1h2o_r <= 7.0) ? 'ok' : (l.ph1to1h2o_r >= 5.5) ? 'warn' : 'bad';
-      const awcS = l.awc_r >= 0.15 ? 'ok' : l.awc_r >= 0.10 ? 'warn' : 'bad';
-      profileHtml += `
-        <div style="font-size:10px;font-weight:600;color:#94a3b8;margin-top:3px">${{depthLabels[i]}}</div>
-        <div class="profile-row"><span>OM</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{omPct}}%;background:#${{omS==='ok'?'10B981':omS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.om_r}}%</span><span class="profile-status status-${{omS}}">${{omS==='ok'?'✓':omS==='warn'?'~':'✗'}}</span></div>
-        <div class="profile-row"><span>pH</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{phPct}}%;background:#${{phS==='ok'?'10B981':phS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.ph1to1h2o_r}}</span><span class="profile-status status-${{phS}}">${{phS==='ok'?'✓':phS==='warn'?'~':'✗'}}</span></div>
-        <div class="profile-row"><span>AWC</span><div class="profile-bar-bg"><div class="profile-bar-fill" style="width:${{awcPct}}%;background:#${{awcS==='ok'?'10B981':awcS==='warn'?'F59E0B':'EF4444'}}"></div></div><span>${{l.awc_r}}</span><span class="profile-status status-${{awcS}}">${{awcS==='ok'?'✓':awcS==='warn'?'~':'✗'}}</span></div>`;
-    }});
-    profileHtml += '<div style="font-size:9px;color:#94a3b8;margin-top:3px">✓ corn optimal ~ borderline ✗ outside range</div>';
-  }}
-
-  // NDVI alert
-  let ndviAlertHtml = '';
-  if (ndviBothLow(isGood, ndviMean)) {{
-    ndviAlertHtml = `<div class="ndvi-alert danger">⚠️ <strong>Soil score (${{field.score}}) AND NDVI (${{ndviMean}}) are both low.</strong> Soil limitations are likely reducing plant vigor. Consider remediation or crop switching.</div>`;
-  }} else if (isGood && ndviMean && parseFloat(ndviMean) >= 0.72) {{
-    ndviAlertHtml = '<div class="ndvi-alert ok">✅ Soil and NDVI both look good — field is performing as expected.</div>';
-  }} else if (isGood && ndviLow) {{
-    ndviAlertHtml = `<div class="ndvi-alert warn">⚠️ Soil score is good but NDVI is lower than expected (${{ndviMean}}). May indicate management or weather factors, not soil problems.</div>`;
-  }}
-
-  // Options
-  let optionsHtml = '';
+  let html = '';
   if (isGood) {{
-    optionsHtml = `<div class="option-card" style="border-left:3px solid #10B981">
+    html = `<div class="option-card" style="border-left:3px solid #10B981">
       <h4 style="color:#166534">✅ No Action Needed</h4>
       <ul>
-        <li>Soil Quality Index: ${{field.score}}/100 — all depths within optimal range</li>
         <li>Estimated corn yield: ${{Math.round(action.base_yield_corn_bu_ac || 180)}} bu/acre</li>
         <li>Revenue: ~$${{Math.round(action.revenue_current_per_ac || 990)}}/acre</li>
-        <li>Maintain current practices — annual soil testing recommended</li>
+        <li>Maintain current practices</li>
       </ul>
     </div>`;
   }} else {{
-    optionsHtml = `<div class="option-card" style="border-left:3px solid #10B981">
-      <h4 style="color:#166534">OPTION 1: FIX FOR CORN (Recommended long-term)</h4>
+    html = `<div class="option-card" style="border-left:3px solid #10B981">
+      <h4 style="color:#166534">OPTION 1: FIX FOR CORN</h4>
       <ul>
-        ${{(action.fix_details || '').split(' | ').filter(d => d && d.indexOf(':') === -1).map(d => '<li>'+d+'</li>').join('')}}
-        <li><strong>Cost:</strong> $${{action.fix_cost_per_ac || 0}}/acre</li>
-        <li><strong>Yield:</strong> ${{action.base_yield_corn_bu_ac || 0}} → ${{action.fixed_yield_corn_bu_ac || 0}} bu/acre</li>
-        <li><strong>Revenue after fix:</strong> ~$${{action.revenue_fixed_per_ac || 0}}/acre</li>
-        <li><strong>Payback:</strong> ${{(action.payback_years || 0).toFixed(1)}} years</li>
+        <li>Cost: $${{action.fix_cost_per_ac || 0}}/acre</li>
+        <li>Yield: ${{action.base_yield_corn_bu_ac || 0}} → ${{action.fixed_yield_corn_bu_ac || 0}} bu/acre</li>
+        <li>Revenue after fix: ~$${{action.revenue_fixed_per_ac || 0}}/acre</li>
+        <li>Payback: ${{(action.payback_years || 0).toFixed(1)}} years</li>
       </ul>
     </div>
     <div class="option-card" style="border-left:3px solid #F59E0B">
-      <h4 style="color:#92400E">OPTION 2: SWITCH TO SOYBEANS (Lower risk)</h4>
+      <h4 style="color:#92400E">OPTION 2: SWITCH TO SOYBEANS</h4>
       <ul>
-        <li>Cost: $0 (saves nitrogen fertilizer for corn)</li>
+        <li>Cost: $0</li>
         <li>Expected yield: ${{action.soy_yield_bu_ac || 0}} bu/acre</li>
         <li>Revenue: ~$${{action.revenue_soy_per_ac || 0}}/acre</li>
-        <li>Soybeans tolerate marginal/poorly-drained soils better than corn</li>
       </ul>
     </div>
     <div class="option-card" style="border-left:3px solid #94a3b8">
       <h4 style="color:#475569">OPTION 3: DO NOTHING</h4>
       <ul>
-        <li>Cost: $0</li>
         <li>Current revenue: ~$${{action.revenue_current_per_ac || 0}}/acre</li>
-        <li>Risk: Yield may decline as soil degrades further</li>
+        <li>Risk: Soil may continue to degrade</li>
       </ul>
     </div>`;
   }}
+  document.getElementById("options-panel").innerHTML = html;
 
-  let recHtml = '';
+  // Recommendation
   if (!isGood) {{
     const pb = (action.payback_years || 0);
     const fc = (action.fix_cost_per_ac || 0);
     const rs = Math.round(action.revenue_soy_per_ac || 0);
-    let msg;
-    if (pb <= 3.0) {{
-      msg = 'Fix for corn now — invest $' + fc + '/acre, breaks even in ' + pb.toFixed(1) + ' years.';
-    }} else {{
-      msg = 'Consider switching to soybeans — lower revenue (~$' + rs + '/ac) but zero upfront cost and less risk on marginal soil.';
-    }}
-    recHtml = '<div class="rec"><strong>Recommendation:</strong> ' + msg + '</div>';
+    let msg = pb <= 3.0
+      ? 'Fix for corn now — invest $'+fc+'/acre, breaks even in '+pb.toFixed(1)+' years.'
+      : 'Consider switching to soybeans — lower revenue (~$'+rs+'/ac) but zero upfront cost and less risk.';
+    document.getElementById("rec-section").innerHTML = '<div class="rec"><strong>Recommendation:</strong> '+msg+'</div>';
+  }} else {{
+    document.getElementById("rec-section").innerHTML = '';
   }}
-
-  document.getElementById("detail-title").textContent = `FIELD DETAIL: ${{field.field_id}} — ${{field.name}}`;
-  document.getElementById("detail-content").innerHTML = `
-    <div class="detail-grid">
-      <div class="map-panel">${{mapSvg}}</div>
-      <div class="profile-panel">
-        <h3>Soil Profile by Depth</h3>
-        ${{profileHtml}}
-      </div>
-    </div>
-    ${{ndviAlertHtml}}
-    <div class="options">${{optionsHtml}}</div>
-    ${{recHtml}}
-  `;
 }}
 
-function ndviBothLow(isGood, ndviMean) {{
-  return !isGood && ndviMean && parseFloat(ndviMean) < 0.65;
-}}
-
-// ── Weather ──
+// ── Weather Table ──
 function renderWeather() {{
-  const panel = document.getElementById("weather-panel");
+  const tbl = document.getElementById("weather-table");
   const yearData = WEATHER.filter(d => d.year === selectedYear);
-  if (yearData.length === 0) {{ panel.innerHTML = '<span style="color:#94a3b8;font-size:11px">No data for '+selectedYear+'</span>'; return; }}
-
+  if (yearData.length === 0) {{ tbl.innerHTML = 'No data'; return; }}
   const months = [1,2,3,4,5,6,7,8,9,10,11,12];
-  const mRain = months.map(m => yearData.filter(d => new Date(d.date).getMonth()+1 === m).reduce((s,d) => s+(d.PRECTOTCORR||0), 0));
-  const annualRain = mRain.reduce((a,b) => a+b, 0);
+  const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Monthly aggregates
+  const mRainIn = months.map(m => {{
+    const d = yearData.filter(r => new Date(r.date).getMonth()+1 === m);
+    return +(d.reduce((s,r) => s + (r.PRECTOTCORR||0), 0) * MM_TO_IN).toFixed(1);
+  }});
   const mTemp = months.map(m => {{
-    const days = yearData.filter(d => new Date(d.date).getMonth()+1 === m);
-    return days.length ? days.reduce((s,d) => s+(d.T2M||0),0)/days.length : 0;
+    const d = yearData.filter(r => new Date(r.date).getMonth()+1 === m);
+    return d.length ? Math.round(d.reduce((s,r) => s+(r.T2M||0),0)/d.length) : 0;
   }});
-  const annualTemp = mTemp.reduce((a,b) => a+b, 0)/12;
 
-  const growDays = yearData.filter(d => {{
-    const m = new Date(d.date).getMonth()+1;
-    return m >= 4 && m <= 9;
+  // 5-yr averages for anomaly
+  const allYears = WEATHER.filter(r => r.year >= 2021 && r.year <= 2025);
+  const mAvgRain = months.map(m => {{
+    const five = allYears.filter(r => {{ const mo = new Date(r.date).getMonth()+1; return mo === m && r.year !== selectedYear; }});
+    const total = five.reduce((s,r) => s + (r.PRECTOTCORR||0), 0);
+    return +(total * MM_TO_IN / 4).toFixed(1);
   }});
-  const annualGdd = Math.round(growDays.reduce((s,d) => s + Math.max(0,((d.T2M_MAX||70)+(d.T2M_MIN||50))/2-50), 0));
 
-  // Anomaly check
-  const allGrow = WEATHER.filter(d => {{
-    const m = new Date(d.date).getMonth()+1;
-    return d.year >= 2021 && d.year <= 2025 && m >= 4 && m <= 9;
+  const mGdd = months.map(m => {{
+    const d = yearData.filter(r => new Date(r.date).getMonth()+1 === m);
+    return Math.round(d.reduce((s,r) => s + Math.max(0, ((r.T2M_MAX||70)+(r.T2M_MIN||50))/2-50), 0));
   }});
-  const avgRain = Math.round(allGrow.reduce((s,d) => s+(d.PRECTOTCORR||0),0) / 5);
-  const thisRain = yearData.filter(d => {{ const m=new Date(d.date).getMonth()+1; return m>=4 && m<=9; }}).reduce((s,d) => s+(d.PRECTOTCORR||0), 0);
-  const rainPct = avgRain > 0 ? Math.round(thisRain/avgRain*100) : 100;
-  const anomalyLabel = rainPct > 130 ? '⚠️ Wet' : rainPct < 70 ? '⚠️ Dry' : '✅ Normal';
+
+  // Events
+  const mEvents = months.map(m => {{
+    const d = yearData.filter(r => new Date(r.date).getMonth()+1 === m);
+    const rain = d.reduce((s,r) => s + (r.PRECTOTCORR||0), 0) * MM_TO_IN;
+    const avgR = mAvgRain[m-1];
+    const maxTemp = Math.max(...d.map(r => r.T2M_MAX||0));
+    if (rain > avgR * 1.5) return 'Heavy rain';
+    if (maxTemp > 95 && m >= 5 && m <= 9) return 'Heat stress';
+    if (rain < avgR * 0.4 && m >= 4 && m <= 9) return 'Dry month';
+    return '';
+  }});
+
+  // Status
+  const mStatus = months.map(m => {{
+    const rain = mRainIn[m-1];
+    const avgR = mAvgRain[m-1];
+    if (m < 3 || m > 10) return '—';
+    if (rain > avgR * 1.4) return 'Wet';
+    if (rain < avgR * 0.5) return 'Dry';
+    return 'Good';
+  }});
+
+  const totalRain = +mRainIn.reduce((a,b) => a+b, 0).toFixed(1);
+  const avgTemp = Math.round(mTemp.reduce((a,b) => a+b, 0)/12);
+  const totalGdd = mGdd.reduce((a,b) => a+b, 0);
+  const growSeasonRain = mRainIn.slice(3, 9).reduce((a,b) => a+b, 0);
+  const avgGrowRain = mAvgRain.slice(3, 9).reduce((a,b) => a+b, 0);
+  const rainPct = avgGrowRain > 0 ? Math.round(growSeasonRain/avgGrowRain*100) : 100;
+  const anomalyLabel = rainPct > 130 ? '⚠️ Wet year' : rainPct < 70 ? '⚠️ Dry year' : '✅ Normal';
   const anomalyColor = rainPct > 130 ? '#EF4444' : rainPct < 70 ? '#F59E0B' : '#10B981';
+  const nEvents = mEvents.filter(e => e).length;
   const soilReliable = rainPct <= 150 && rainPct >= 60;
 
-  panel.innerHTML = `
-    <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between">
-      <div class="weather-metric">
-        <div class="value">${{annualRain.toFixed(1)}}″</div>
-        <div class="label">Rainfall</div>
-        ${{miniChartSVG(mRain, Math.max(...mRain, 1), 120, 30)}}
-      </div>
-      <div class="weather-metric">
-        <div class="value">${{annualTemp.toFixed(1)}}°F</div>
-        <div class="label">Avg Temp</div>
-        ${{miniChartSVG(mTemp, Math.max(...mTemp, 1), 120, 30)}}
-      </div>
-      <div class="weather-metric">
-        <div class="value">${{annualGdd}}</div>
-        <div class="label">GDD (Base 50°F)</div>
-        <div style="font-size:9px;color:#64748b">Apr–Sep cumulative</div>
-      </div>
-      <div class="weather-metric">
-        <div class="value" style="color:${{anomalyColor}}">${{anomalyLabel}}</div>
-        <div class="label">${{rainPct}}% of avg rain</div>
-        <div style="font-size:9px;color:#94a3b8">Soil readings ${{soilReliable ? 'reliable' : 'may be affected'}}</div>
-      </div>
-    </div>
-  `;
-}}
+  let rows = `<tr><th>Month</th><th>Rain</th><th>Temp</th><th>GDD</th><th>Extreme Weather</th><th>Status</th></tr>`;
+  for (let i = 0; i < 12; i++) {{
+    const evtClass = mEvents[i] ? 'evt' : 'evt-none';
+    rows += `<tr><td>${{mNames[i]}}</td><td>${{mRainIn[i]}}″</td><td>${{mTemp[i]}}°F</td><td>${{mGdd[i]}}</td><td class="${{evtClass}}">${{mEvents[i] || '—'}}</td><td>${{mStatus[i]}}</td></tr>`;
+  }}
+  rows += `<tr class="total"><td><strong>TOTAL</strong></td><td><strong>${{totalRain}}″</strong></td><td><strong>${{avgTemp}}°F</strong></td><td><strong>${{totalGdd}}</strong></td><td><strong>${{nEvents}} event${{nEvents!==1?'s':''}}</strong></td><td><strong>${{anomalyLabel}}</strong></td></tr>`;
 
-function miniChartSVG(vals, maxVal, w, h) {{
-  if (vals.length === 0) return '';
-  const svg = `<svg width="${{w}}" height="${{h}}" viewBox="0 0 ${{vals.length-1}} ${{maxVal}}" style="overflow:visible">
-    <polyline fill="none" stroke="#3b82f6" stroke-width="0.15" vector-effect="non-scaling-stroke"
-      points="${{vals.map((v,i)=>`${{i}},${{maxVal-v}}`).join(' ')}}"/>
-    <circle cx="${{vals.length-1}}" cy="${{maxVal-vals[vals.length-1]}}" r="0.3" fill="#3b82f6"/>
-  </svg>`;
-  return svg;
+  const anomalyPanel = `<div class="weather-annual">
+    <span>Annual: <strong>${{totalRain}}″ rain</strong> · <strong>${{avgTemp}}°F avg</strong> · <strong>${{totalGdd}} GDD</strong></span>
+    <span style="color:${{anomalyColor}};font-weight:600">${{anomalyLabel}} (${{rainPct}}% of 5-yr growing-season avg)</span>
+    <span style="color:#94a3b8">Soil readings ${{soilReliable ? '✅ reliable' : '⚠️ may be affected by weather'}}</span>
+  </div>`;
+
+  tbl.innerHTML = `<table class="weather-table">${{rows}}</table>${{anomalyPanel}}`;
 }}
 
 // ── Year selector ──
@@ -551,25 +509,19 @@ document.getElementById("year-selector").addEventListener("change", (e) => {{
   selectedYear = parseInt(e.target.value);
   renderWeather();
   renderRankings();
-  renderDetail();
 }});
 
 // ── Init ──
+renderMap();
+renderProfile();
+renderOptions();
 renderRankings();
-renderDetail();
 renderWeather();
 </script>
 </body>
 </html>"""
 
     return html
-
-
-def _first_detail(details: str) -> str:
-    if not details:
-        return "Soil quality below threshold"
-    parts = details.split(" | ")
-    return parts[0] if parts else details[:80]
 
 
 def main():
