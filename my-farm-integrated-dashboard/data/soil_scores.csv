@@ -1,11 +1,10 @@
 field_id,name,acres,lat,lon,score,raw_score,tier,topsoil_score,subsoil_score,om_score,ph_score,awc_score,bd_score,drainage_score,drainagecl,muname
-F4,East Flats,1386,41.942,-88.835,99,0.9933,excellent,100,100,1.0,1.0,0.9667,1.0,1.0,Well drained,Ipava silt loam
-F9,Hill Field,1108,41.913,-88.842,98,0.9816,excellent,100,100,1.0,1.0,1.0,0.9775,0.85,Moderately well drained,Drummer silty clay loam
-F5,South Bend,621,41.996,-88.76,97,0.9706,excellent,100,100,1.0,1.0,0.9278,1.0,0.85,Moderately well drained,Elburn silt loam
-F1,North Quarter,1115,41.959,-88.795,97,0.9662,excellent,100,100,1.0,1.0,1.0,0.875,0.85,Moderately well drained,Drummer silty clay loam
-F6,Timber Edge,859,42.056,-88.738,92,0.9172,excellent,84,84,1.0,0.7,0.9611,1.0,1.0,Well drained,Sable silty clay loam
-F2,Creek Bottom,982,41.912,-88.83,88,0.8834,excellent,91,73,0.77,0.91,0.9833,0.855,1.0,Well drained,Ipava silt loam
-F3,West Ridge,1140,41.915,-88.792,71,0.7101,good,80,60,0.6733,0.775,0.6556,0.655,0.85,Moderately well drained,Elburn silt loam
-F8,Middle Forty,1252,41.935,-88.81,63,0.629,watch,78,59,0.6267,0.785,0.5944,0.4725,0.55,Somewhat poorly drained,Ipava silt loam
-F7,Low Ground,934,41.9,-88.815,49,0.4929,critical,68,45,0.4067,0.735,0.5333,0.37,0.25,Poorly drained,Drummer silty clay loam
-F10,Back Section,1335,41.965,-88.77,46,0.4597,critical,75,39,0.36,0.7567,0.3389,0.265,0.55,Somewhat poorly drained,Sable silty clay loam
+osm-1062497610,osm-1062497610,1140,41.9189,-88.7936,99,0.9933,excellent,100,100,1.0,1.0,0.9667,1.0,1.0,Well drained,Ipava silt loam
+osm-1044624342,osm-1044624342,1115,41.9646,-88.7954,97,0.9662,excellent,100,100,1.0,1.0,1.0,0.875,0.85,Moderately well drained,Drummer silty clay loam
+osm-1157777856,osm-1157777856,1385,41.9418,-88.8348,97,0.9706,excellent,100,100,1.0,1.0,0.9278,1.0,0.85,Moderately well drained,Elburn silt loam
+osm-984977162,osm-984977162,1251,41.7977,-88.8997,92,0.9172,excellent,84,84,1.0,0.7,0.9611,1.0,1.0,Well drained,Sable silty clay loam
+osm-1062497604,osm-1062497604,1110,41.9148,-88.8323,88,0.8834,excellent,91,73,0.77,0.91,0.9833,0.855,1.0,Well drained,Ipava silt loam
+osm-1062497609,osm-1062497609,981,41.9046,-88.8002,71,0.7101,good,80,60,0.6733,0.775,0.6556,0.655,0.85,Moderately well drained,Elburn silt loam
+osm-746833241,osm-746833241,858,42.057,-88.7428,63,0.629,watch,78,59,0.6267,0.785,0.5944,0.4725,0.55,Somewhat poorly drained,Ipava silt loam
+osm-1333868303,osm-1333868303,620,41.9945,-88.7639,49,0.4929,critical,68,45,0.4067,0.735,0.5333,0.37,0.25,Poorly drained,Drummer silty clay loam
+osm-984977148,osm-984977148,933,41.8029,-88.8799,46,0.4597,critical,75,39,0.36,0.7567,0.3389,0.265,0.55,Somewhat poorly drained,Sable silty clay loam

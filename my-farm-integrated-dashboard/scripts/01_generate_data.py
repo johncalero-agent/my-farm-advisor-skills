@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Step 1: Generate raw agricultural data for 10 corn fields in DeKalb County, IL.
+"""Step 1: Generate raw agricultural data for 9 corn fields in DeKalb County, IL.
 
+Uses real OSM field boundaries from assignment-3 data.
 Outputs:
-  data/field_boundaries.csv       — Field metadata (ID, name, acres, lat, lon)
+  data/field_boundaries.csv       — Field metadata (real OSM IDs, acres, lat, lon)
+  data/real_boundaries.json       — Polygon vertices for map rendering
   data/soil_profiles.csv          — SSURGO-like soil horizons (0-15, 15-30, 30-60 cm)
   data/weather_daily_2021_2025.csv — NASA POWER daily weather
   data/cdl_annual_2021_2025.csv    — USDA CDL crop classification per field-year
   data/ndvi_growing_season.csv     — NDVI values per field per year (DOY 90-270)
-
-All values are realistic for northern Illinois Corn Belt conditions.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -20,22 +21,31 @@ import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+GEOJSON_PATH = REPO_ROOT / "my-farm-advisor" / "field-management" / "field-boundaries" / "examples" / "real_10_fields_illinois.geojson"
 
 np.random.seed(101)
 
-# ── Field Identities ────────────────────────────────────────────────────────
-FIELDS = [
-    {"field_id": "F1", "name": "North Quarter", "acres": 1115, "lat": 41.959, "lon": -88.795, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F2", "name": "Creek Bottom", "acres": 982, "lat": 41.912, "lon": -88.830, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F3", "name": "West Ridge", "acres": 1140, "lat": 41.915, "lon": -88.792, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F4", "name": "East Flats", "acres": 1386, "lat": 41.942, "lon": -88.835, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F5", "name": "South Bend", "acres": 621, "lat": 41.996, "lon": -88.760, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F6", "name": "Timber Edge", "acres": 859, "lat": 42.056, "lon": -88.738, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F7", "name": "Low Ground", "acres": 934, "lat": 41.900, "lon": -88.815, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F8", "name": "Middle Forty", "acres": 1252, "lat": 41.935, "lon": -88.810, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F9", "name": "Hill Field", "acres": 1108, "lat": 41.913, "lon": -88.842, "state": "IL", "county": "DeKalb"},
-    {"field_id": "F10", "name": "Back Section", "acres": 1335, "lat": 41.965, "lon": -88.770, "state": "IL", "county": "DeKalb"},
-]
+# ── Load Real Field Boundaries ──────────────────────────────────────────────
+with open(GEOJSON_PATH) as f:
+    _geo = json.load(f)
+
+FIELDS = []
+for feat in _geo["features"]:
+    p = feat["properties"]
+    acres = p["area_acres"]
+    if acres < 400:
+        continue  # drop 226-acre field
+    coords = feat["geometry"]["coordinates"][0]
+    lon_cent = round(sum(c[0] for c in coords) / len(coords), 4)
+    lat_cent = round(sum(c[1] for c in coords) / len(coords), 4)
+    FIELDS.append({
+        "field_id": p["field_id"],
+        "name": p["field_id"],  # use OSM ID as name
+        "acres": round(acres),
+        "lat": lat_cent, "lon": lon_cent,
+        "state": "IL", "county": "DeKalb",
+    })
 
 
 def _make_layer(top, bot, om, ph, awc, bd, clay, sand):
@@ -49,14 +59,14 @@ def generate_soil_data():
     """Generate realistic SSURGO soil profiles.
 
     Good/excellent fields use random realistic parameters.
-    Problematic fields (F3, F7, F8, F10) use presets with known issues:
-      - F10: Critical — subsoil acidity (pH 4.0) + severe compaction (BD 1.80)
-      - F7:  Critical — very poor drainage + extremely low OM (0.4% subsoil)
-      - F3:  Watch — moderate topsoil but subsoil acidity exists
-      - F8:  Watch — compaction + moderate pH issues
+    Problematic fields use real OSM IDs with known issues:
+      - osm-984977148: Critical — subsoil acidity (pH 3.8) + severe compaction (BD 1.80)
+      - osm-1333868303: Critical — very poor drainage + extremely low OM (0.4% subsoil)
+      - osm-1062497609: Watch — moderate topsoil but subsoil acidity exists
+      - osm-746833241: Watch — compaction + moderate pH issues
     """
     presets = {
-        "F10": {
+        "osm-984977148": {
             "drainagecl": "Somewhat poorly drained",
             "muname": "Sable silty clay loam", "compname": "Sable", "comppct_r": 55,
             "layers": [
@@ -65,7 +75,7 @@ def generate_soil_data():
                 _make_layer(30, 60, 0.3, 3.8, 0.02, 1.80, 44, 24),
             ],
         },
-        "F7": {
+        "osm-1333868303": {
             "drainagecl": "Poorly drained",
             "muname": "Drummer silty clay loam", "compname": "Drummer", "comppct_r": 50,
             "layers": [
@@ -74,7 +84,7 @@ def generate_soil_data():
                 _make_layer(30, 60, 0.4, 4.3, 0.04, 1.70, 44, 16),
             ],
         },
-        "F3": {
+        "osm-1062497609": {
             "drainagecl": "Moderately well drained",
             "muname": "Elburn silt loam", "compname": "Elburn", "comppct_r": 45,
             "layers": [
@@ -83,7 +93,7 @@ def generate_soil_data():
                 _make_layer(30, 60, 1.1, 4.7, 0.07, 1.56, 28, 22),
             ],
         },
-        "F8": {
+        "osm-746833241": {
             "drainagecl": "Somewhat poorly drained",
             "muname": "Ipava silt loam", "compname": "Ipava", "comppct_r": 40,
             "layers": [

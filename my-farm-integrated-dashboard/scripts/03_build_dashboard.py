@@ -28,7 +28,14 @@ def load_all_data():
     ndvi = pd.read_csv(DATA_DIR / "ndvi_growing_season.csv")
     scores = pd.read_csv(DATA_DIR / "soil_scores.csv")
     actions = pd.read_csv(DATA_DIR / "action_recommendations.csv")
-    return fields, soil, weather, ndvi, scores, actions
+    # Load real boundary polygons
+    boundaries_path = DATA_DIR / "real_boundaries.json"
+    if boundaries_path.exists():
+        with open(boundaries_path) as f:
+            boundaries = json.load(f)
+    else:
+        boundaries = None
+    return fields, soil, weather, ndvi, scores, actions, boundaries
 
 
 def _serialize_soil(soil):
@@ -56,11 +63,12 @@ def _serialize_soil(soil):
     return grouped
 
 
-def build_html(fields, soil, weather, ndvi, scores, actions):
+def build_html(fields, soil, weather, ndvi, scores, actions, boundaries):
     """Assemble the full HTML dashboard page."""
     scores_json = json.dumps(scores.to_dict("records"))
     actions_json = json.dumps(actions.to_dict("records"))
     soil_json = json.dumps(_serialize_soil(soil))
+    boundaries_json = json.dumps(boundaries) if boundaries else "[]"
 
     weather_records = []
     for _, row in weather.iterrows():
@@ -225,6 +233,7 @@ const WEATHER = {weather_json};
 const NDVI = {ndvi_json};
 const ACTIONS = {actions_json};
 const SOIL = {soil_json};
+const BOUNDARIES = {boundaries_json};
 const MM_TO_IN = 1.0 / 25.4;
 
 let selectedField = "{default_fid}";
@@ -274,37 +283,50 @@ function sparkSmall(vals, w, h) {{
 function renderMap() {{
   const field = SCORES.find(s => s.field_id === selectedField);
   if (!field) return;
-  const score = field.score;
-  const acres = field.acres;
-  const name = field.name;
+  const score = field.score; const acres = field.acres; const name = field.field_id;
   const color = score >= 80 ? '#10B981' : score >= 55 ? '#F59E0B' : '#EF4444';
-  const opacity = 0.4 + score * 0.005;
-  const w = 600, h = 340, cx = w/2, cy = h/2, sz = 90 + (acres - 620) * 0.06;
+  const w = 500, h = 360;
+  const svg = document.getElementById("map-container");
+  const boundary = BOUNDARIES.find(b => b.field_id === selectedField);
 
-  // Simple 6-point polygon
-  const pts = [[cx-sz*0.55,cy-sz*0.45],[cx+sz*0.45,cy-sz*0.5],[cx+sz*0.65,cy],[cx+sz*0.35,cy+sz*0.48],[cx-sz*0.28,cy+sz*0.55],[cx-sz*0.65,cy+sz*0.08]];
-  const d = pts.map((p,i)=>`${{i===0?'M':'L'}} ${{p[0].toFixed(0)}} ${{p[1].toFixed(0)}}`).join(' ')+' Z';
+  let pathD = '';
+  if (boundary && boundary.vertices && boundary.vertices.length > 0) {{
+    // Project lat/lon to SVG coordinates
+    const verts = boundary.vertices;
+    const bbox = boundary.bbox;  // [lon_min, lat_min, lon_max, lat_max]
+    const pad = 0.08;
+    const lonRange = (bbox[2] - bbox[0]) * (1 + pad * 2);
+    const latRange = (bbox[3] - bbox[1]) * (1 + pad * 2);
+    const scale = Math.min((w - 60) / lonRange, (h - 60) / latRange);
+    const cx = w/2; const cy = h/2;
+    const px = lng => cx + (lng - (bbox[0] + bbox[2]) / 2) * scale;
+    const py = lat => cy - (lat - (bbox[1] + bbox[3]) / 2) * scale;
+    pathD = verts.map((v, i) => `${{i === 0 ? 'M' : 'L'}} ${{px(v[0]).toFixed(0)}} ${{py(v[1]).toFixed(0)}}`).join(' ') + ' Z';
+  }} else {{
+    // Fallback: generate approximate shape from bbox
+    const b = boundary ? boundary.bbox : [-88.8, 41.9, -88.75, 41.95];
+    const scale = Math.min((w - 60) / (b[2] - b[0]), (h - 60) / (b[3] - b[1]));
+    const px = lng => w/2 + (lng - (b[0] + b[2]) / 2) * scale;
+    const py = lat => h/2 - (lat - (b[1] + b[3]) / 2) * scale;
+    pathD = `M ${{px(b[0]).toFixed(0)}} ${{py(b[1]).toFixed(0)}} L ${{px(b[2]).toFixed(0)}} ${{py(b[1]).toFixed(0)}} L ${{px(b[2]).toFixed(0)}} ${{py(b[3]).toFixed(0)}} L ${{px(b[0]).toFixed(0)}} ${{py(b[3]).toFixed(0)}} Z`;
+  }}
 
-  // Grid lines
   let grid = '';
   for (let x = 0; x <= w; x += 100) grid += `<line x1="${{x}}" y1="0" x2="${{x}}" y2="${{h}}" stroke="#e2e8f0" stroke-width="0.5"/>`;
   for (let y = 0; y <= h; y += 100) grid += `<line x1="0" y1="${{y}}" x2="${{w}}" y2="${{y}}" stroke="#e2e8f0" stroke-width="0.5"/>`;
+  const sx = w - 90, sy = h - 30;
 
-  // Scale bar
-  const scaleX = w - 90, scaleY = h - 30;
-
-  const svg = document.getElementById("map-container");
   svg.innerHTML = `<svg width="${{w}}" height="${{h}}" viewBox="0 0 ${{w}} ${{h}}" style="width:100%;height:100%">
     <rect width="${{w}}" height="${{h}}" fill="#dcfce7"/>
     ${{grid}}
-    <path d="${{d}}" fill="${{color}}" fill-opacity="${{opacity}}" stroke="${{color}}" stroke-width="2.5"/>
-    <text x="${{cx}}" y="${{cy-25}}" text-anchor="middle" font-size="10" fill="#475569" font-weight="600">${{name}}</text>
-    <text x="${{cx}}" y="${{cy-8}}" text-anchor="middle" font-size="9" fill="#64748b">${{acres}} acres · Soil Quality: ${{score}}/100</text>
-    <text x="${{cx}}" y="${{cy+8}}" text-anchor="middle" font-size="9" fill="${{color}}" font-weight="600">${{score>=80?'🟢 Excellent':score>=65?'🟡 Good':score>=55?'🟠 Needs attention':'🔴 Critical'}}</text>
-    <line x1="${{scaleX}}" y1="${{scaleY}}" x2="${{scaleX-60}}" y2="${{scaleY}}" stroke="#94a3b8" stroke-width="1.5"/>
-    <line x1="${{scaleX}}" y1="${{scaleY-4}}" x2="${{scaleX}}" y2="${{scaleY+4}}" stroke="#94a3b8" stroke-width="1"/>
-    <line x1="${{scaleX-60}}" y1="${{scaleY-4}}" x2="${{scaleX-60}}" y2="${{scaleY+4}}" stroke="#94a3b8" stroke-width="1"/>
-    <text x="${{scaleX-30}}" y="${{scaleY-5}}" text-anchor="middle" font-size="7" fill="#94a3b8">~1,000 ft</text>
+    <path d="${{pathD}}" fill="${{color}}" fill-opacity="0.35" stroke="${{color}}" stroke-width="2.5"/>
+    <text x="${{w/2}}" y="${{h/2-25}}" text-anchor="middle" font-size="10" fill="#475569" font-weight="600">${{name}}</text>
+    <text x="${{w/2}}" y="${{h/2-8}}" text-anchor="middle" font-size="9" fill="#64748b">${{acres}} acres · Soil Quality: ${{score}}/100</text>
+    <text x="${{w/2}}" y="${{h/2+8}}" text-anchor="middle" font-size="9" fill="${{color}}" font-weight="600">${{score>=80?'🟢 Excellent':score>=65?'🟡 Good':score>=55?'🟠 Needs attention':'🔴 Critical'}}</text>
+    <line x1="${{sx}}" y1="${{sy}}" x2="${{sx-50}}" y2="${{sy}}" stroke="#94a3b8" stroke-width="1.5"/>
+    <line x1="${{sx}}" y1="${{sy-4}}" x2="${{sx}}" y2="${{sy+4}}" stroke="#94a3b8" stroke-width="1"/>
+    <line x1="${{sx-50}}" y1="${{sy-4}}" x2="${{sx-50}}" y2="${{sy+4}}" stroke="#94a3b8" stroke-width="1"/>
+    <text x="${{sx-25}}" y="${{sy-5}}" text-anchor="middle" font-size="7" fill="#94a3b8">~1,000 ft</text>
     <text x="15" y="18" font-size="8" fill="#94a3b8">N</text>
     <polygon points="15,14 12,20 18,20" fill="#94a3b8"/>
   </svg>`;
@@ -530,12 +552,14 @@ def main():
     print("=" * 60)
 
     print("\nLoading data files...")
-    fields, soil, weather, ndvi, scores, actions = load_all_data()
+    fields, soil, weather, ndvi, scores, actions, boundaries = load_all_data()
     print(f"  {len(fields)} fields, {len(soil)} soil layers, {len(weather)} weather records")
     print(f"  {len(ndvi)} NDVI obs, {len(scores)} scores, {len(actions)} actions")
+    if boundaries:
+        print(f"  {len(boundaries)} real boundary polygons loaded")
 
     print("\nBuilding HTML...")
-    html = build_html(fields, soil, weather, ndvi, scores, actions)
+    html = build_html(fields, soil, weather, ndvi, scores, actions, boundaries)
 
     output_path = OUTPUT_DIR / "corn_soil_dashboard.html"
     output_path.write_text(html, encoding="utf-8")
