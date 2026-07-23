@@ -308,6 +308,7 @@ This skill is the main farm-specific intelligence layer. The rest of the reposit
 
 ## Data and Runtime Notes
 
+- A custom EDA subskill is available at [`eda/eda-assignment-2/`](eda/eda-assignment-2/) for field-level comparisons of boundaries, weather, and CDL across multiple growers. Run `scripts/run_eda.py` after setting `DATA_PIPELINE_DATA_ROOT` to generate 12 static analysis outputs.
 - This skill suite ships large supporting examples and shared data assets.
 - The deterministic scripts and data-tree helpers are part of the skill, not just external repo utilities.
 - Canonical path helpers live in [`data-pipeline/src/scripts/lib/paths.py`](data-pipeline/src/scripts/lib/paths.py).
